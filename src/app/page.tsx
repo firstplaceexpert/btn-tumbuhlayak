@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { ProgramHomeView } from '../components/ProgramHomeView';
 import { LoginScreen } from '../components/LoginScreen';
 import { AppShell, WorkspaceTab } from '../components/AppShell';
 import { ArisanLayerView } from '../components/ArisanLayerView';
@@ -28,11 +29,14 @@ import {
 const DEFAULT_TEMPLATE = HOUSE_TEMPLATES[0];
 
 export default function Home() {
-  // Authentication state (Step 0: Login Page)
+  // Public Landing & Authentication Gate
   const [currentUser, setCurrentUser] = useState<DemoUser | null>(null);
+  const [publicView, setPublicView] = useState<'home' | 'login' | 'register'>('home');
+  const [prefillZoneId, setPrefillZoneId] = useState<string | undefined>(undefined);
+  const [requestedArisanZoneId, setRequestedArisanZoneId] = useState<string | undefined>(undefined);
 
-  // 2-Layer Navigation & NFC Gate
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('arisan');
+  // Navigation & NFC Gate
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('beranda');
   const [activeNfcRecord, setActiveNfcRecord] = useState<NfcPropertyRecord | null>(null);
 
   // Layer 2: Editable floorplan template & room geometry
@@ -59,16 +63,19 @@ export default function Home() {
     [modules]
   );
 
-  const handleLoginSuccess = (user: DemoUser) => {
+  const handleLoginSuccess = (user: DemoUser, isNewRegistration = false) => {
     setCurrentUser(user);
     setActiveNfcRecord(null);
-    setActiveTab('arisan');
+    setRequestedArisanZoneId(user.domicileZoneId);
+    setActiveTab(isNewRegistration ? 'arisan' : 'beranda');
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     setActiveNfcRecord(null);
-    setActiveTab('arisan');
+    setRequestedArisanZoneId(undefined);
+    setPublicView('home');
+    setActiveTab('beranda');
   };
 
   // Layer 1 Pitching Action: Simulate winning the Arisan draw & receiving BTN Smart Key NFC Card
@@ -285,9 +292,30 @@ export default function Home() {
     setFloorView('lt1');
   };
 
-  // STEP 0: Render Official BTN Login Gate if not signed in
+  // STEP 0: Promotional Main Dashboard OR Unified Login/Registration Gate
   if (!currentUser) {
-    return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+    if (publicView === 'home') {
+      return (
+        <ProgramHomeView
+          user={null}
+          onOpenRegister={(zoneId) => {
+            setPrefillZoneId(zoneId);
+            setPublicView('register');
+          }}
+          onOpenLogin={() => setPublicView('login')}
+        />
+      );
+    }
+
+    return (
+      <LoginScreen
+        key={`${publicView}-${prefillZoneId || 'default'}`}
+        initialMode={publicView === 'register' ? 'register' : 'login'}
+        preselectedZoneId={prefillZoneId}
+        onBackToHome={() => setPublicView('home')}
+        onLoginSuccess={handleLoginSuccess}
+      />
+    );
   }
 
   return (
@@ -304,10 +332,25 @@ export default function Home() {
         profile={profile}
         selectedModuleCount={selectedModuleCount}
       >
-        {/* LAYER 1: Skema Arisan Rumah BTN */}
+        {/* Beranda Program (Dashboard Utama Berwarna & Personal) */}
+        {activeTab === 'beranda' && (
+          <ProgramHomeView
+            user={currentUser}
+            hasUnlockedNfc={Boolean(activeNfcRecord)}
+            onGoToArisan={(zoneId) => {
+              setRequestedArisanZoneId(zoneId || currentUser.domicileZoneId);
+              setActiveTab('arisan');
+            }}
+            onGoToNfc={() => setActiveTab('nfc')}
+            onGoToPlanner={() => setActiveTab('planner')}
+          />
+        )}
+
+        {/* Skema Arisan Rumah BTN (Otomatis sesuai wilayah biodata user) */}
         {activeTab === 'arisan' && (
           <ArisanLayerView
             user={currentUser}
+            initialZoneId={requestedArisanZoneId}
             onSimulateWinUnit={handleSimulateWinUnit}
             onGoToNfcScanner={() => setActiveTab('nfc')}
           />

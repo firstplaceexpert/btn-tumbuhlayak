@@ -5,6 +5,7 @@ import { HousingProfile, ValuationSummary } from '../types';
 import { formatRupiah, formatPercent } from '../lib/formatters';
 import { parseSafeNumber } from '../lib/validation';
 import { VisualCharts } from './VisualCharts';
+import { AnimatedNumber } from './AnimatedNumber';
 
 interface ValuationAnalyticsViewProps {
   profile: HousingProfile;
@@ -60,13 +61,21 @@ export const ValuationAnalyticsView: React.FC<ValuationAnalyticsViewProps> = ({
 
   return (
     <div className="space-y-6 animate-panel-enter">
-      {/* Title Row */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-        <div>
+      {/* Warm Illustrated Header Banner */}
+      <section className="rounded-[18px] border border-hairline bg-gradient-to-r from-[#EEF4FD] via-[#FCFBF8] to-[#FEF7EA] p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+        <div className="lg:col-span-8 space-y-3">
+          <div className="inline-flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span className="px-2.5 py-0.5 rounded-full bg-brand-soft text-brand border border-brand-border">
+              Valuasi & Simulasi KPR Renovasi
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full bg-ochre-soft text-ochre border border-ochre-border">
+              Asumsi simulasi · bukan laporan KJPP
+            </span>
+          </div>
           <h1 className="font-display text-[22px] font-bold text-ink tracking-[-0.015em] leading-snug">
             Valuasi properti, penyusutan & simulasi KPR BTN
           </h1>
-          <p className="text-sm text-ink-secondary mt-1">
+          <p className="text-sm text-ink-secondary leading-relaxed">
             Nilai aset saat ini pasca penyusutan{' '}
             <span className="font-semibold text-btnred tabular-nums">
               {formatRupiah(valuation.depreciatedPropertyValue)}
@@ -81,25 +90,35 @@ export const ValuationAnalyticsView: React.FC<ValuationAnalyticsViewProps> = ({
             </span>{' '}
             (cicilan BTN {formatRupiah(activeLoan.monthlyInstallment)}/bln).
           </p>
+
+          <div className="flex flex-wrap items-center gap-2.5 pt-1">
+            <button
+              type="button"
+              onClick={onGoToPlanner}
+              className="h-9 px-4 rounded-control border border-control bg-sheet hover:bg-well text-sm font-medium text-ink transition-colors whitespace-nowrap"
+            >
+              Ubah denah
+            </button>
+            <button
+              type="button"
+              onClick={onGoToProposal}
+              className="h-9 px-4 rounded-control bg-brand hover:bg-brand-hover text-white text-sm font-semibold transition-colors whitespace-nowrap"
+            >
+              Ringkasan cetak
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={onGoToPlanner}
-            className="h-9 px-3.5 rounded-control border border-control bg-sheet hover:bg-well text-sm font-medium text-ink transition-colors whitespace-nowrap"
-          >
-            Ubah denah
-          </button>
-          <button
-            type="button"
-            onClick={onGoToProposal}
-            className="h-9 px-4 rounded-control bg-brand hover:bg-brand-hover text-white text-sm font-semibold transition-colors whitespace-nowrap"
-          >
-            Ringkasan cetak
-          </button>
+        <div className="lg:col-span-4">
+          <div className="rounded-[14px] bg-[#F6F4EF] border border-hairline p-2 shadow-[0_10px_24px_-16px_rgba(31,36,43,0.18)]">
+            <img
+              src="/illustrations/valuation-kpr-growth.jpg"
+              alt="Ilustrasi pertumbuhan nilai rumah tumbuh dan simulasi KPR BTN"
+              className="w-full aspect-[4/3] object-cover rounded-[10px] block"
+            />
+          </div>
         </div>
-      </div>
+      </section>
 
       {/* Row 1: Two Balanced Cards — Property Valuation Chart & BTN Financing Simulator */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
@@ -110,17 +129,25 @@ export const ValuationAnalyticsView: React.FC<ValuationAnalyticsViewProps> = ({
         >
           <VisualCharts valuation={valuation} />
 
-          {/* Transparent Valuation + Depreciation Formula Box */}
-          <div className="p-3.5 rounded-control bg-well border border-hairline text-xs space-y-1">
-            <div className="font-semibold text-ink">
-              Rumus penyusutan bangunan (SPI) & proyeksi renovasi
+          {/* Transparent Valuation + Depreciation Formula Box (Explicitly Marked as Heuristic Assumptions) */}
+          <div className="p-3.5 rounded-control bg-well border border-hairline text-xs space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-semibold text-ink">
+                Model simulasi penyusutan & proyeksi nilai renovasi
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-ochre-soft text-ochre border border-ochre-border text-[11px] font-semibold">
+                Asumsi heuristik · bukan KJPP
+              </span>
             </div>
             <div className="font-mono text-ink-secondary">
-              Nilai_Pasca_Susut = Tanah + Bangunan × (1 - Usia/{profile.umurEkonomisTahun} × k_kondisi)
+              Nilai_Pasca_Susut = Tanah ({Math.round(profile.porsiNilaiTanah * 100)}%) + Bangunan × (1 - Usia/{profile.umurEkonomisTahun} × k_kondisi)
             </div>
             <div className="font-mono text-brand">
               Nilai_Renovasi = Nilai_Pasca_Susut + [ ∑(Biaya × α) × {valuation.synergyFactor.toFixed(2)} ] + Pemulihan
             </div>
+            <p className="text-[11px] text-ink-secondary leading-relaxed">
+              Parameter pengali kondisi (0,75/1,0/1,35), porsi tanah ({Math.round(profile.porsiNilaiTanah * 100)}%), bonus sinergi (+4%/+2%/+2%), dan batas pemulihan penyusutan min(40% × susut, 10% × nilai tambah) adalah asumsi simulasi awal — dapat dikalibrasi dengan data transaksi lokal atau regresi hedonik.
+            </p>
           </div>
         </section>
 
@@ -134,10 +161,10 @@ export const ValuationAnalyticsView: React.FC<ValuationAnalyticsViewProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-rule">
               <div>
                 <h2 className="text-sm font-semibold text-ink">
-                  Simulasi pembiayaan hunian
+                  Simulasi pembiayaan renovasi
                 </h2>
                 <p className="text-xs text-ink-secondary mt-0.5">
-                  KPR Mikro Renovasi BTN vs target tabungan mandiri
+                  Asumsi suku bunga pasar (8,25%–9,75% p.a.) vs target tabungan mandiri
                 </p>
               </div>
 
@@ -210,15 +237,24 @@ export const ValuationAnalyticsView: React.FC<ValuationAnalyticsViewProps> = ({
                       Estimasi angsuran per bulan
                     </div>
                     <div className="mt-1 text-[28px] leading-tight font-semibold text-white tabular-nums">
-                      {formatRupiah(activeLoan.monthlyInstallment)}
+                      <AnimatedNumber
+                        value={activeLoan.monthlyInstallment}
+                        format={(n) => formatRupiah(Math.round(n))}
+                      />
                     </div>
                   </div>
                   <div className="text-[13px] text-blue-100 sm:text-right space-y-0.5 tabular-nums">
                     <div>
-                      Bunga {(activeLoan.annualInterestRate * 100).toFixed(2).replace('.', ',')}% p.a. anuitas
+                      Asumsi bunga pasar {(activeLoan.annualInterestRate * 100).toFixed(2).replace('.', ',')}% p.a. anuitas
                     </div>
                     <div>
-                      Total bunga: <span className="font-semibold text-white">{formatRupiah(activeLoan.totalInterest)}</span>
+                      Total bunga:{' '}
+                      <span className="font-semibold text-white">
+                        <AnimatedNumber
+                          value={activeLoan.totalInterest}
+                          format={(n) => formatRupiah(Math.round(n))}
+                        />
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -230,7 +266,10 @@ export const ValuationAnalyticsView: React.FC<ValuationAnalyticsViewProps> = ({
                       Uji rasio cicilan terhadap penghasilan (DSR)
                     </label>
                     <span className="text-xs font-mono font-semibold text-ink tabular-nums">
-                      DSR {(dsrRatio * 100).toFixed(1).replace('.', ',')}%
+                      <AnimatedNumber
+                        value={dsrRatio * 100}
+                        format={(n) => `DSR ${n.toFixed(1).replace('.', ',')}%`}
+                      />
                     </span>
                   </div>
 

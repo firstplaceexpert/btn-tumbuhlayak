@@ -8,57 +8,57 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Official btn.co.id 2024-2026 Rebrand Palette
-        frame: "#F3F6FB",
-        sheet: "#FFFFFF",
-        well: "#F7F9FD",
-        active: "#EAF1FF",
-        hairline: "#E3E9F4",
-        rule: "#EDF1F8",
-        control: "#CBD5E6",
+        // Calm Warm-Paper Palette paired with refined BTN Royal Blue & Crimson (low glare)
+        frame: "#F4F2ED",
+        sheet: "#FCFBF8",
+        well: "#F6F4EF",
+        active: "#EEF3FC",
+        hairline: "#E7E3DB",
+        rule: "#EFECE6",
+        control: "#D4CFC5",
         ink: {
-          DEFAULT: "#0F172A",
-          secondary: "#475569",
-          subtle: "#64748B",
+          DEFAULT: "#1F242B",
+          secondary: "#57606D",
+          subtle: "#7A828F",
         },
-        // Primary: BTN Dynamic Blue (#125EFA)
+        // Primary: Refined BTN Royal Blue
         brand: {
-          DEFAULT: "#125EFA",
-          deep: "#0B46C4",
-          navy: "#082D7F",
-          hover: "#0E4FD6",
-          soft: "#EDF3FF",
-          border: "#C3D7FE",
+          DEFAULT: "#1B56C6",
+          deep: "#163F92",
+          navy: "#0F2D6B",
+          hover: "#1646A5",
+          soft: "#EEF3FC",
+          border: "#CBD9F6",
         },
-        // Signature Accent: BTN Stable Red (#DC0714)
+        // Signature Accent: Refined BTN Crimson
         btnred: {
-          DEFAULT: "#DC0714",
-          hover: "#B80510",
-          soft: "#FEF0F1",
-          border: "#F9C5C8",
+          DEFAULT: "#C4252E",
+          hover: "#A51D25",
+          soft: "#FDF2F2",
+          border: "#F4CCCC",
         },
         // Semantic & Phase accents
         ochre: {
-          DEFAULT: "#9A5B08",
-          mid: "#C47D0E",
-          gold: "#F5B82E",
-          soft: "#FEF6E4",
-          border: "#F3D9A4",
+          DEFAULT: "#9E6316",
+          mid: "#C27D20",
+          gold: "#E8B13B",
+          soft: "#FCF5E8",
+          border: "#EEDCB8",
         },
         tealarch: {
-          DEFAULT: "#0E7490",
-          soft: "#ECFAFD",
-          border: "#BAE6F2",
+          DEFAULT: "#176B7E",
+          soft: "#EDF8FA",
+          border: "#C3E3EA",
         },
         positive: {
-          DEFAULT: "#0E8345",
-          soft: "#EAF8F0",
-          border: "#BBE6CE",
+          DEFAULT: "#1D7A4E",
+          soft: "#EEF8F2",
+          border: "#C5E6D3",
         },
         negative: {
-          DEFAULT: "#DC0714",
-          soft: "#FEF0F1",
-          border: "#F9C5C8",
+          DEFAULT: "#C4252E",
+          soft: "#FDF2F2",
+          border: "#F4CCCC",
         },
       },
       fontFamily: {

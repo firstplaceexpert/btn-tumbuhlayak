@@ -29,6 +29,64 @@ export const loginSchema = z.object({
     .max(40, 'Kata sandi maksimal 40 karakter'),
 });
 
+// Strict customer registration schema (simulated bank KYC biodata)
+export const registerSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(3, 'Nama lengkap minimal 3 karakter sesuai KTP')
+      .max(80, 'Nama maksimal 80 karakter')
+      .transform((val) => sanitizeString(val, 80)),
+    nik: z
+      .string()
+      .trim()
+      .regex(/^\d{16}$/, 'NIK harus tepat 16 digit angka sesuai KTP'),
+    birthPlace: z
+      .string()
+      .trim()
+      .min(2, 'Tempat lahir wajib diisi')
+      .max(50, 'Tempat lahir maksimal 50 karakter')
+      .transform((val) => sanitizeString(val, 50)),
+    birthDate: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Pilih tanggal lahir yang valid')
+      .refine((val) => {
+        const year = parseInt(val.slice(0, 4), 10);
+        return year >= 1945 && year <= 2008;
+      }, 'Usia minimal 18 tahun untuk pendaftaran KPR BTN'),
+    hasBtnAccount: z.boolean(),
+    btnAccountNumber: z.string().trim().optional(),
+    domicileZoneId: z.string().trim().min(2, 'Pilih wilayah domisili'),
+    domicileCity: z
+      .string()
+      .trim()
+      .min(2, 'Masukkan kota / kabupaten domisili')
+      .max(60, 'Domisili maksimal 60 karakter')
+      .transform((val) => sanitizeString(val, 60)),
+    email: z
+      .string()
+      .trim()
+      .min(5, 'Masukkan email yang valid')
+      .max(90, 'Email maksimal 90 karakter')
+      .email('Format email tidak valid'),
+    pin: z
+      .string()
+      .trim()
+      .min(6, 'Kata sandi / PIN minimal 6 karakter')
+      .max(40, 'Kata sandi maksimal 40 karakter'),
+  })
+  .refine(
+    (data) =>
+      !data.hasBtnAccount ||
+      /^\d{10,16}$/.test((data.btnAccountNumber || '').replace(/[\s-]/g, '')),
+    {
+      message: 'Nomor rekening BTN harus berisi 10–16 digit angka (atau centang buka rekening otomatis)',
+      path: ['btnAccountNumber'],
+    }
+  );
+
 // Strict NFC Smart Key Card UID validation
 export const nfcUidSchema = z
   .string()

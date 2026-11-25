@@ -3,20 +3,20 @@
 @tailwind utilities;
 
 :root {
-  --ground: #f3f6fb;
-  --surface: #ffffff;
-  --raised: #f7f9fd;
-  --active: #eaf1ff;
-  --border: #e3e9f4;
-  --rule: #edf1f8;
-  --control: #cbd5e6;
-  --ink: #0f172a;
-  --muted: #475569;
-  --btn-blue: #125efa;
-  --btn-blue-deep: #0b46c4;
-  --btn-red: #dc0714;
-  --positive: #0e8345;
-  --negative: #dc0714;
+  --ground: #f4f2ed;
+  --surface: #fcfbf8;
+  --raised: #f6f4ef;
+  --active: #eef3fc;
+  --border: #e7e3db;
+  --rule: #efece6;
+  --control: #d4cfc5;
+  --ink: #1f242b;
+  --muted: #57606d;
+  --btn-blue: #1b56c6;
+  --btn-blue-deep: #163f92;
+  --btn-red: #c4252e;
+  --positive: #1d7a4e;
+  --negative: #c4252e;
 }
 
 @layer base {
@@ -78,7 +78,7 @@ input[type="range"].studio-range {
   -webkit-appearance: none;
   appearance: none;
   height: 5px;
-  background: #d8e3f8;
+  background: #ddd8ce;
   border-radius: 999px;
 }
 
@@ -88,9 +88,9 @@ input[type="range"].studio-range::-webkit-slider-thumb {
   width: 17px;
   height: 17px;
   border-radius: 999px;
-  background: #125efa;
-  border: 2.5px solid #ffffff;
-  box-shadow: 0 0 0 1px #125efa; /* taste-skill-ignore */
+  background: #1b56c6;
+  border: 2.5px solid #fcfbf8;
+  box-shadow: 0 0 0 1px #1b56c6; /* taste-skill-ignore */
   cursor: pointer;
   transition: transform 150ms ease;
 }
@@ -103,20 +103,20 @@ input[type="range"].studio-range::-moz-range-thumb {
   width: 17px;
   height: 17px;
   border-radius: 999px;
-  background: #125efa;
-  border: 2.5px solid #ffffff;
-  box-shadow: 0 0 0 1px #125efa; /* taste-skill-ignore */
+  background: #1b56c6;
+  border: 2.5px solid #fcfbf8;
+  box-shadow: 0 0 0 1px #1b56c6; /* taste-skill-ignore */
   cursor: pointer;
   transition: transform 150ms ease;
 }
 
-/* Official BTN Dynamic Blue solid surfaces */
+/* Calm BTN Royal Blue solid surfaces (low glare, high readability) */
 .btn-kpi-surface {
-  background-color: #125efa;
+  background-color: #1b56c6;
 }
 
 .btn-hero-surface {
-  background-color: #0b46c4;
+  background-color: #163f92;
 }
 
 /* Purposeful view transition */
@@ -157,6 +157,55 @@ input[type="range"].studio-range::-moz-range-thumb {
 
 .interactive-surface:hover {
   border-color: #c3d7fe;
+}
+
+/* Crisp chart entrance animations (left-to-right curve sweep & vertical/horizontal bar growth) */
+@keyframes chartRevealX {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes chartBarGrowY {
+  from {
+    transform: scaleY(0);
+    opacity: 0.4;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes chartBarGrowX {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.chart-reveal-x {
+  animation: chartRevealX 920ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.chart-reveal-x-delayed {
+  animation: chartRevealX 920ms cubic-bezier(0.22, 1, 0.36, 1) 140ms both;
+}
+
+.chart-bar-y {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: chartBarGrowY 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.chart-bar-x {
+  transform-origin: left center;
+  animation: chartBarGrowX 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -216,5 +265,15 @@ input[type="range"].studio-range::-moz-range-thumb {
   .print-avoid-break {
     page-break-inside: avoid;
     break-inside: avoid;
+  }
+
+  .chart-reveal-x,
+  .chart-reveal-x-delayed,
+  .chart-bar-y,
+  .chart-bar-x {
+    animation: none !important;
+    clip-path: none !important;
+    transform: none !important;
+    opacity: 1 !important;
   }
 }

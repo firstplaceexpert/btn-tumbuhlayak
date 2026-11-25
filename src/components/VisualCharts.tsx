@@ -1,14 +1,17 @@
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { ValuationSummary } from '../types';
 import { formatRupiah, formatPercent } from '../lib/formatters';
+import { AnimatedNumber, useInViewOnce } from './AnimatedNumber';
 
 interface VisualChartsProps {
   valuation: ValuationSummary;
 }
 
 export const VisualCharts: React.FC<VisualChartsProps> = ({ valuation }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inView = useInViewOnce(containerRef, 0.08);
   const {
     initialPropertyValue,
     depreciationAmount,
@@ -63,7 +66,7 @@ export const VisualCharts: React.FC<VisualChartsProps> = ({ valuation }) => {
   const yTicks = [0, 0.33, 0.66, 1].map((t) => Math.round(yMin + (yMax - yMin) * t));
 
   return (
-    <div className="space-y-6">
+    <div ref={containerRef} className="space-y-6">
       {/* 1. Perbandingan Nilai Properti: Awal vs Setelah Penyusutan vs Setelah Renovasi */}
       <div className="space-y-3">
         <div className="flex items-baseline justify-between gap-2">
@@ -71,7 +74,10 @@ export const VisualCharts: React.FC<VisualChartsProps> = ({ valuation }) => {
             Perbandingan nilai properti (susut vs renovasi)
           </h3>
           <span className="text-sm font-semibold text-brand tabular-nums">
-            {formatRupiah(projectedNewPropertyValue)}
+            <AnimatedNumber
+              value={projectedNewPropertyValue}
+              format={(n) => formatRupiah(Math.round(n))}
+            />
           </span>
         </div>
 
@@ -86,7 +92,9 @@ export const VisualCharts: React.FC<VisualChartsProps> = ({ valuation }) => {
             </div>
             <div className="h-2.5 w-full bg-well rounded-full overflow-hidden">
               <div
-                className="h-full bg-[#475569] rounded-full transition-[width] duration-500"
+                className={`h-full bg-[#475569] rounded-full transition-[width] duration-500 ${
+                  inView ? 'chart-bar-x' : 'scale-x-0'
+                }`}
                 style={{ width: `${(initialPropertyValue / maxCompare) * 100}%` }}
               />
             </div>
@@ -99,13 +107,21 @@ export const VisualCharts: React.FC<VisualChartsProps> = ({ valuation }) => {
                 Nilai saat ini setelah penyusutan (-{formatPercent(valuation.depreciationRate)})
               </span>
               <span className="font-semibold text-btnred tabular-nums">
-                {formatRupiah(depreciatedPropertyValue)}
+                <AnimatedNumber
+                  value={depreciatedPropertyValue}
+                  format={(n) => formatRupiah(Math.round(n))}
+                />
               </span>
             </div>
             <div className="h-2.5 w-full bg-well rounded-full overflow-hidden">
               <div
-                className="h-full bg-btnred rounded-full transition-[width] duration-500"
-                style={{ width: `${(depreciatedPropertyValue / maxCompare) * 100}%` }}
+                className={`h-full bg-btnred rounded-full transition-[width] duration-500 ${
+                  inView ? 'chart-bar-x' : 'scale-x-0'
+                }`}
+                style={{
+                  width: `${(depreciatedPropertyValue / maxCompare) * 100}%`,
+                  animationDelay: '90ms',
+                }}
               />
             </div>
           </div>
@@ -117,21 +133,30 @@ export const VisualCharts: React.FC<VisualChartsProps> = ({ valuation }) => {
                 Proyeksi nilai setelah renovasi (rumah tumbuh)
               </span>
               <span className="font-semibold text-brand tabular-nums">
-                {formatRupiah(projectedNewPropertyValue)}
+                <AnimatedNumber
+                  value={projectedNewPropertyValue}
+                  format={(n) => formatRupiah(Math.round(n))}
+                />
               </span>
             </div>
             <div className="h-3 w-full bg-well rounded-full overflow-hidden flex gap-[2px]">
               <div
-                className="h-full bg-brand transition-[width] duration-500"
+                className={`h-full bg-brand transition-[width] duration-500 ${
+                  inView ? 'chart-bar-x' : 'scale-x-0'
+                }`}
                 style={{
                   width: `${((depreciatedPropertyValue + totalDevelopmentCost) / maxCompare) * 100}%`,
+                  animationDelay: '160ms',
                 }}
               />
               {netAddedValue > 0 && (
                 <div
-                  className="h-full bg-positive transition-[width] duration-500"
+                  className={`h-full bg-positive transition-[width] duration-500 ${
+                    inView ? 'chart-bar-x' : 'scale-x-0'
+                  }`}
                   style={{
                     width: `${Math.max(3, (netAddedValue / maxCompare) * 100)}%`,
+                    animationDelay: '260ms',
                   }}
                 />
               )}
@@ -235,35 +260,33 @@ export const VisualCharts: React.FC<VisualChartsProps> = ({ valuation }) => {
             </text>
           ))}
 
-          {/* Unrenovated Depreciating Line (BTN Red dashed) */}
-          <path
-            d={withoutLine}
-            fill="none"
-            stroke="#DC0714"
-            strokeWidth="2"
-            strokeDasharray="5 4"
-          />
-
-          {/* Renovated Growth Line (BTN Blue solid) */}
-          <path d={withLine} fill="none" stroke="#125EFA" strokeWidth="2.5" />
-
-          {/* End-point dots */}
-          {fiveYearProjection.length > 0 && (
-            <>
-              <circle
-                cx={xPos(fiveYearProjection.length - 1)}
-                cy={yPos(fiveYearProjection[fiveYearProjection.length - 1].withRenovationValue)}
-                r="4"
-                fill="#125EFA"
-              />
-              <circle
-                cx={xPos(fiveYearProjection.length - 1)}
-                cy={yPos(fiveYearProjection[fiveYearProjection.length - 1].withoutRenovationValue)}
-                r="3.5"
-                fill="#DC0714"
-              />
-            </>
-          )}
+          {/* Animated 5-Year Lines & End-Point Dots */}
+          <g className={inView ? 'chart-reveal-x-delayed' : 'opacity-0'}>
+            <path
+              d={withoutLine}
+              fill="none"
+              stroke="#DC0714"
+              strokeWidth="2"
+              strokeDasharray="5 4"
+            />
+            <path d={withLine} fill="none" stroke="#125EFA" strokeWidth="2.5" />
+            {fiveYearProjection.length > 0 && (
+              <>
+                <circle
+                  cx={xPos(fiveYearProjection.length - 1)}
+                  cy={yPos(fiveYearProjection[fiveYearProjection.length - 1].withRenovationValue)}
+                  r="4"
+                  fill="#125EFA"
+                />
+                <circle
+                  cx={xPos(fiveYearProjection.length - 1)}
+                  cy={yPos(fiveYearProjection[fiveYearProjection.length - 1].withoutRenovationValue)}
+                  r="3.5"
+                  fill="#DC0714"
+                />
+              </>
+            )}
+          </g>
         </svg>
       </div>
 

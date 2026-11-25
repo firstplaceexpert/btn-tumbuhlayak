@@ -234,32 +234,40 @@ export const ProposalPrintView: React.FC<ProposalPrintViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-rule">
-                {valuation.phases.map((phase) =>
-                  phase.modules.map((mod) => (
-                    <tr key={mod.moduleId}>
-                      <td className="py-2.5 px-3">
-                        <span className="font-medium text-ink">{mod.name}</span>
-                        <span className="text-ink-secondary ml-1.5">
-                          ({phase.phaseName.split(':')[0]})
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 text-right tabular-nums text-ink-secondary">
-                        {mod.volume} {mod.unitLabel}
-                      </td>
-                      <td className="py-2.5 px-3 text-right tabular-nums text-ink-secondary">
-                        {formatRupiah(mod.materialCost)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right tabular-nums text-ink-secondary">
-                        {formatRupiah(mod.laborCost)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right tabular-nums text-ink-secondary">
-                        {formatRupiah(mod.contingencyCost)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-medium text-ink tabular-nums">
-                        {formatRupiah(mod.totalCost)}
-                      </td>
-                    </tr>
-                  ))
+                {valuation.phases.every((p) => p.modules.length === 0) ? (
+                  <tr>
+                    <td colSpan={6} className="py-4 px-3 text-center text-ink-secondary">
+                      Belum ada modul pengembangan yang dipilih (menampilkan kondisi rumah eksisting BTN).
+                    </td>
+                  </tr>
+                ) : (
+                  valuation.phases.map((phase) =>
+                    phase.modules.map((mod) => (
+                      <tr key={mod.moduleId}>
+                        <td className="py-2.5 px-3">
+                          <span className="font-medium text-ink">{mod.name}</span>
+                          <span className="text-ink-secondary ml-1.5">
+                            ({phase.phaseName.split(':')[0]})
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right tabular-nums text-ink-secondary">
+                          {mod.volume} {mod.unitLabel}
+                        </td>
+                        <td className="py-2.5 px-3 text-right tabular-nums text-ink-secondary">
+                          {formatRupiah(mod.materialCost)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right tabular-nums text-ink-secondary">
+                          {formatRupiah(mod.laborCost)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right tabular-nums text-ink-secondary">
+                          {formatRupiah(mod.contingencyCost)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-medium text-ink tabular-nums">
+                          {formatRupiah(mod.totalCost)}
+                        </td>
+                      </tr>
+                    ))
+                  )
                 )}
               </tbody>
               <tfoot>
@@ -288,15 +296,15 @@ export const ProposalPrintView: React.FC<ProposalPrintViewProps> = ({
         {/* Section 5: Simulasi Cicilan & Tabungan */}
         <section className="space-y-3 print-avoid-break">
           <h3 className="font-display text-sm font-semibold text-ink">
-            5. Opsi pembiayaan KPR Mikro BTN & tabungan bertahap
+            5. Opsi pembiayaan renovasi (asumsi bunga pasar) & tabungan bertahap
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="border border-hairline rounded-control overflow-hidden">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-hairline bg-well text-ink-secondary">
-                    <th className="py-2 px-3 font-medium">Tenor KPR BTN</th>
-                    <th className="py-2 px-3 font-medium text-right">Bunga p.a.</th>
+                    <th className="py-2 px-3 font-medium">Tenor simulasi</th>
+                    <th className="py-2 px-3 font-medium text-right">Asumsi bunga p.a.</th>
                     <th className="py-2 px-3 font-medium text-right">Cicilan / bln</th>
                   </tr>
                 </thead>
@@ -340,7 +348,7 @@ export const ProposalPrintView: React.FC<ProposalPrintViewProps> = ({
         </section>
 
         <footer className="pt-4 border-t border-rule text-xs text-ink-secondary leading-relaxed">
-          Dokumen ini dihasilkan secara deterministik oleh btn TumbuhLayak berbasis acuan lokal SNI & MAPPI yang terverifikasi Kartu Kunci NFC ({activeNfcRecord.uid}). Estimasi penyusutan & proyeksi nilai merupakan simulasi perencanaan mandiri dan bukan laporan resmi KJPP.
+          Dokumen ini dihasilkan secara deterministik oleh btn TumbuhLayak berbasis asumsi simulasi heuristik (porsi tanah, pengali kondisi, sinergi ruang, dan asumsi suku bunga pasar) yang terhubung dengan Kartu Kunci NFC ({activeNfcRecord.uid}). Estimasi penyusutan & proyeksi nilai merupakan simulasi perencanaan mandiri dan bukan laporan resmi KJPP maupun penawaran resmi suku bunga Bank BTN.
         </footer>
       </article>
     </div>

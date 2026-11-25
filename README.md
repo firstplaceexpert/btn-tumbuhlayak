@@ -8,10 +8,9 @@
 
 **btn TumbuhLayak** menyatukan seluruh siklus kepemilikan rumah bagi generasi muda (Gen-Z) dan nasabah **Bank BTN** dalam satu platform digital:
 
-1. **Arisan Rumah Harian Gen-Z Berbasis Lokasi (Rekening Escrow BTN)**
-   - Menggunakan plafon harga resmi rumah subsidi FLPP Bank BTN per wilayah Indonesia sesuai **Kepmen PUPR No. 689/KPTS/M/2023 (berlaku 2024–2026)**: Jawa & Sumatra (Rp 166 Jt), Sulawesi/Babel/Kepri (Rp 173 Jt), Kalimantan (Rp 182 Jt), Jabodetabek/Bali/Nusra (Rp 185 Jt), serta Papua (Rp 240 Jt).
-   - Sistem kuota per wilayah dengan kewajiban pembukaan **Rekening Tabungan BTN auto-debit harian** (menambah nasabah baru & dana murah/CASA Bank BTN).
-   - Kalkulator interaktif dengan **proyeksi kenaikan harga tahunan**, **markup penyangga inflasi otomatis (`solveIdealArisanMarkup`)**, **percepatan serah terima 1–2 rumah subsidi per hari di tahun-tahun awal**, serta 2 grafik proyeksi SVG & tabel tahunan.
+1. **Arisan Rumah Harian Gen-Z Berbasis Lokasi (Arisan Klaster + KPR FLPP vs Arisan Murni)**
+   - Menggunakan plafon harga resmi rumah subsidi FLPP & SBUM (Rp 4 Jt non-Papua, Rp 10 Jt Papua) per wilayah Indonesia sesuai **[Kepmen PUPR No. 689/KPTS/M/2023](https://jdih.pu.go.id/internal/assets/assets/produk/KepmenPUPR/2023/06/2023kmpupr689.pdf) (berlaku sejak 2024, cek pembaruan)**: Jawa & Sumatra (Rp 166 Jt), Sulawesi/Babel/Mentawai/Kepri (Rp 173 Jt), Kalimantan (Rp 182 Jt), Jabodetabek serta Bali, Nusa Tenggara, Maluku, Maluku Utara, Kep. Anambas, Murung Raya & Mahakam Ulu (Rp 185 Jt), serta Papua (Rp 240 Jt).
+   - Dilengkapi toggle perbandingan **Arisan klaster + KPR FLPP** (`src/lib/clusterScheme.ts`) vs **Arisan murni**, Dashboard Peserta, Dashboard BTN (rekening baru, dana masuk harian, kapasitas akad, CASA), **pemeriksaan kelayakan MBR (Permen PKP No. 5/2025) & DSR**, serta panel asumsi dan tautan sumber resmi.
 
 2. **Jembatan Fisik–Digital: Scan Kartu Kunci Rumah Pintar (NFC)**
    - Penerima serah terima rumah memperoleh **Kartu Kunci Rumah fisik berchip NFC** (`BTN-NFC-XXXX-XXXX`).
@@ -50,9 +49,10 @@
     │   └── page.tsx
     ├── components/
     │   ├── AppShell.tsx               # Floating top horizontal navbar & account menu
-    │   ├── ArisanCharts.tsx           # Dual SVG charts (units/day vs inflation & cumulative curve)
-    │   ├── ArisanLayerView.tsx        # Location-first Gen-Z daily micro-arisan & quota calculator
+    │   ├── ArisanCharts.tsx           # Dual SVG charts for pure arisan projection
+    │   ├── ArisanLayerView.tsx        # Location-first arisan, cluster+KPR toggle, dashboards & MBR/DSR
     │   ├── BtnLogo.tsx                # Official Bank BTN logo component
+    │   ├── ClusterSchemeCharts.tsx    # 3 SVG charts for Arisan Klaster + KPR FLPP vs Arisan Murni
     │   ├── HouseBlueprint.tsx         # Interactive architectural floorplan & door swing editor
     │   ├── LoginScreen.tsx            # Portal login with demo personas
     │   ├── NfcScannerView.tsx         # Pure NFC smart home key verification screen
@@ -67,7 +67,8 @@
     │   ├── housingConfig.ts           # Baseline SNI construction modules & BTN rates
     │   └── nfcPropertyRegistry.ts     # Demo accounts & BTN NFC smart key unit registry
     ├── lib/
-    │   ├── calculator.ts              # Deterministic RAB, depreciation, valuation & arisan engine
+    │   ├── calculator.ts              # Deterministic RAB, depreciation, valuation & pure arisan engine
+    │   ├── clusterScheme.ts           # Standalone Arisan Klaster + KPR FLPP comparison simulator
     │   ├── formatters.ts              # IDR (Jt/M/T), area & percentage formatters
     │   └── validation.ts              # Zod validation schemas
     └── types/

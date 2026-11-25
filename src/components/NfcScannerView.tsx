@@ -176,11 +176,56 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
         )}
       </div>
 
-      {/* Centered Pure NFC Scanner Workspace */}
-      <div className="max-w-2xl mx-auto space-y-5">
+      {/* Balanced 2-Column NFC Scanner Workspace with Friendly BTN Illustration */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left (5 cols): Friendly BTN Cartoon Illustration + Compact 3-Step Guide */}
+        <aside className="lg:col-span-5 space-y-4">
+          <div className="rounded-[18px] border border-hairline bg-gradient-to-b from-[#EEF4FD] to-[#FCFBF8] p-3.5 shadow-[0_12px_28px_-18px_rgba(31,36,43,0.16)]">
+            <img
+              src="/illustrations/nfc-smart-card-scan.jpg"
+              alt="Ilustrasi pemilik rumah BTN memindai kartu kunci pintar NFC ke perangkat"
+              className="w-full aspect-[4/3] object-cover rounded-[12px] block"
+            />
+          </div>
+
+          <section
+            aria-label="Panduan pemindaian kartu kunci rumah"
+            className="rounded-card border border-hairline bg-well p-4 space-y-3"
+          >
+            <div className="text-xs font-semibold text-ink">Cara memindai kartu kunci BTN</div>
+            <ol className="space-y-2.5 text-xs text-ink-secondary">
+              <li className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-brand-soft text-brand font-bold flex items-center justify-center flex-shrink-0 text-[11px]">
+                  1
+                </span>
+                <span>
+                  <strong className="text-ink">Siapkan Kartu Kunci BTN</strong> berchip NFC yang diterima saat serah terima unit.
+                </span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-btnred-soft text-btnred font-bold flex items-center justify-center flex-shrink-0 text-[11px]">
+                  2
+                </span>
+                <span>
+                  <strong className="text-ink">Tempel atau ketik nomor seri</strong> yang tercetak pada bagian belakang kartu.
+                </span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-positive-soft text-positive font-bold flex items-center justify-center flex-shrink-0 text-[11px]">
+                  3
+                </span>
+                <span>
+                  <strong className="text-ink">Buka akses rumah Anda</strong> — denah asli, rencana renovasi, dan valuasi otomatis terbuka.
+                </span>
+              </li>
+            </ol>
+          </section>
+        </aside>
+
+        {/* Right (7 cols): Interactive Pure NFC Sensor Pad & Manual Verification */}
         <section
           aria-label="Pemindai kartu kunci rumah NFC BTN"
-          className="border border-hairline rounded-card bg-sheet p-6 sm:p-8 space-y-6"
+          className="lg:col-span-7 border border-hairline rounded-[18px] bg-sheet p-6 sm:p-7 space-y-6"
         >
           {/* Visual NFC Sensor Pad */}
           <div className="p-6 sm:p-8 rounded-card bg-well border border-hairline flex flex-col items-center text-center space-y-4">
@@ -334,34 +379,6 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
               </button>
             </div>
           </form>
-        </section>
-
-        {/* Clean 3-Step Usage Guide */}
-        <section
-          aria-label="Panduan pemindaian kartu kunci rumah"
-          className="grid grid-cols-1 sm:grid-cols-3 gap-3.5"
-        >
-          <div className="p-4 rounded-card border border-hairline bg-sheet space-y-1">
-            <div className="text-xs font-semibold text-brand">Langkah 1</div>
-            <div className="text-[13px] font-semibold text-ink">Siapkan Kartu Kunci BTN</div>
-            <p className="text-xs text-ink-secondary leading-relaxed">
-              Gunakan kartu kunci rumah resmi berchip NFC yang diterima saat serah terima unit.
-            </p>
-          </div>
-          <div className="p-4 rounded-card border border-hairline bg-sheet space-y-1">
-            <div className="text-xs font-semibold text-brand">Langkah 2</div>
-            <div className="text-[13px] font-semibold text-ink">Tempel atau Ketik Nomor</div>
-            <p className="text-xs text-ink-secondary leading-relaxed">
-              Dekatkan kartu ke sensor NFC ponsel atau ketik nomor seri di bagian belakang kartu.
-            </p>
-          </div>
-          <div className="p-4 rounded-card border border-hairline bg-sheet space-y-1">
-            <div className="text-xs font-semibold text-brand">Langkah 3</div>
-            <div className="text-[13px] font-semibold text-ink">Buka Akses Rumah Anda</div>
-            <p className="text-xs text-ink-secondary leading-relaxed">
-              Denah rumah, rencana renovasi bertahap, dan nilai rumah saat ini otomatis terbuka.
-            </p>
-          </div>
         </section>
       </div>
     </div>

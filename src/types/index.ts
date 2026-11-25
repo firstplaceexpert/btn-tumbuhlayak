@@ -155,6 +155,7 @@ export type FurnitureStyle =
   | 'bath'
   | 'kitchen'
   | 'carport'
+  | 'terrace'
   | 'stairs'
   | 'custom';
 
@@ -174,15 +175,22 @@ export interface FloorRoom {
   furniture?: FurnitureStyle;
   doorWall?: WallSide;
   doorType?: DoorType;
+  doorAlign?: 'start' | 'end';
   windowWalls?: WallSide[];
   elevation?: string;
+  isOutdoor?: boolean;
 }
+
+export type HousingProgramCategory = 'subsidi-flpp' | 'kpr-komersial' | 'fleksibel';
 
 export interface HouseTemplate {
   id: string;
   name: string;
   shortLabel: string;
   subtitle: string;
+  programCategory: HousingProgramCategory;
+  programBadge: string;
+  regulationBasis: string;
   lotLength: number;
   lotWidth: number;
   luasTanah: number;
@@ -200,6 +208,12 @@ export interface DemoUser {
   email: string;
   name: string;
   roleLabel: string;
+  nik?: string;
+  birthPlace?: string;
+  birthDate?: string;
+  btnAccountNumber?: string;
+  domicileCity?: string;
+  domicileZoneId?: string;
   arisanGroupName: string;
   arisanSlotNumber: number;
   paidMonths: number;
@@ -257,10 +271,15 @@ export interface ArisanLocationZone {
   shortLabel: string;
   sampleCities: string;
   clusterName: string;
-  officialFlppPrice: number; // Kepmen PUPR No. 689/KPTS/M/2023 (berlaku 2024-2026)
+  officialFlppPrice: number; // Kepmen PUPR No. 689/KPTS/M/2023 (berlaku sejak 2024, cek pembaruan)
+  sbumAmount: number; // Subsidi Bantuan Uang Muka: Rp 4 Jt non-Papua, Rp 10 Jt Papua
   regulationNote: string;
+  mbrZoneLabel: string; // Permen PKP No. 5 Tahun 2025
+  mbrMaxIncomeSingle: number;
+  mbrMaxIncomeMarried: number;
+  mbrNote?: string;
   defaultQuota: number;
-  registeredMembers: number; // Current Gen-Z members joined in this cluster
+  registeredMembers: number; // Data simulasi peserta terdaftar
   defaultDailyContribution: number;
   defaultInflationRate: number;
   developerPartner: string;

@@ -15,11 +15,12 @@ import {
   LogOut,
   CheckCircle2,
   ChevronDown,
+  Home,
 } from 'lucide-react';
 import { DemoUser, HousingProfile, NfcPropertyRecord } from '../types';
 import { BtnLogo } from './BtnLogo';
 
-export type WorkspaceTab = 'arisan' | 'nfc' | 'planner' | 'analytics' | 'proposal';
+export type WorkspaceTab = 'beranda' | 'arisan' | 'nfc' | 'planner' | 'analytics' | 'proposal';
 
 interface AppShellProps {
   user: DemoUser;
@@ -109,7 +110,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           <div className="flex items-center gap-2.5 flex-shrink-0">
             <button
               type="button"
-              onClick={() => handleNavClick(isPropertyUnlocked ? 'planner' : 'arisan')}
+              onClick={() => handleNavClick('beranda')}
               className="text-left focus:outline-none rounded-control"
               aria-label="Beranda btn TumbuhLayak"
             >
@@ -125,20 +126,39 @@ export const AppShell: React.FC<AppShellProps> = ({
           {/* Center: Horizontal Navigation Menu */}
           <nav
             aria-label="Navigasi utama"
-            className="hidden lg:flex items-center gap-1 flex-shrink-0"
+            className="hidden lg:flex items-center gap-0.5 flex-shrink-0"
           >
+            <button
+              type="button"
+              onClick={() => handleNavClick('beranda')}
+              aria-current={activeTab === 'beranda' ? 'page' : undefined}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-[10px] text-[12.5px] whitespace-nowrap transition-colors ${
+                activeTab === 'beranda'
+                  ? 'bg-brand-soft text-brand font-semibold'
+                  : 'text-ink-secondary hover:bg-well hover:text-ink font-medium'
+              }`}
+            >
+              <Home
+                className={`w-3.5 h-3.5 flex-shrink-0 ${
+                  activeTab === 'beranda' ? 'text-brand' : 'text-ink-subtle'
+                }`}
+                aria-hidden="true"
+              />
+              <span>Beranda</span>
+            </button>
+
             <button
               type="button"
               onClick={() => handleNavClick('arisan')}
               aria-current={activeTab === 'arisan' ? 'page' : undefined}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-[10px] text-[13px] whitespace-nowrap transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-[10px] text-[12.5px] whitespace-nowrap transition-colors ${
                 activeTab === 'arisan'
                   ? 'bg-brand-soft text-brand font-semibold'
                   : 'text-ink-secondary hover:bg-well hover:text-ink font-medium'
               }`}
             >
               <Users
-                className={`w-4 h-4 flex-shrink-0 ${
+                className={`w-3.5 h-3.5 flex-shrink-0 ${
                   activeTab === 'arisan' ? 'text-brand' : 'text-ink-subtle'
                 }`}
                 aria-hidden="true"
@@ -150,14 +170,14 @@ export const AppShell: React.FC<AppShellProps> = ({
               type="button"
               onClick={() => handleNavClick('nfc')}
               aria-current={activeTab === 'nfc' ? 'page' : undefined}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-[10px] text-[13px] whitespace-nowrap transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-[10px] text-[12.5px] whitespace-nowrap transition-colors ${
                 activeTab === 'nfc'
                   ? 'bg-brand-soft text-brand font-semibold'
                   : 'text-ink-secondary hover:bg-well hover:text-ink font-medium'
               }`}
             >
               <Wifi
-                className={`w-4 h-4 flex-shrink-0 ${
+                className={`w-3.5 h-3.5 flex-shrink-0 ${
                   activeTab === 'nfc'
                     ? 'text-brand'
                     : isPropertyUnlocked
@@ -166,7 +186,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                 }`}
                 aria-hidden="true"
               />
-              <span>Scan Kartu Rumah</span>
+              <span>Scan Kartu</span>
               {isPropertyUnlocked ? (
                 <CheckCircle2 className="w-3.5 h-3.5 text-positive flex-shrink-0" aria-hidden="true" />
               ) : (
@@ -188,14 +208,14 @@ export const AppShell: React.FC<AppShellProps> = ({
                       type="button"
                       onClick={() => handleNavClick(item.id)}
                       aria-current={isActive ? 'page' : undefined}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-[10px] text-[13px] whitespace-nowrap transition-colors ${
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-[10px] text-[12.5px] whitespace-nowrap transition-colors ${
                         isActive
                           ? 'bg-brand-soft text-brand font-semibold'
                           : 'text-ink-secondary hover:bg-well hover:text-ink font-medium'
                       }`}
                     >
                       <Icon
-                        className={`w-4 h-4 flex-shrink-0 ${
+                        className={`w-3.5 h-3.5 flex-shrink-0 ${
                           isActive ? 'text-brand' : 'text-ink-subtle'
                         }`}
                         aria-hidden="true"
@@ -253,6 +273,11 @@ export const AppShell: React.FC<AppShellProps> = ({
                   <div className="px-2.5 py-2 border-b border-rule mb-1">
                     <div className="text-[13px] font-semibold text-ink truncate">{user.name}</div>
                     <div className="text-xs text-ink-secondary truncate">{user.email}</div>
+                    {user.domicileCity && (
+                      <div className="text-[11px] text-brand font-medium truncate mt-0.5">
+                        Domisili: {user.domicileCity}
+                      </div>
+                    )}
                   </div>
 
                   {isPropertyUnlocked && activeNfcRecord && (
@@ -345,6 +370,19 @@ export const AppShell: React.FC<AppShellProps> = ({
         {mobileMenuOpen && (
           <div className="lg:hidden max-w-[1260px] mx-auto mt-2 rounded-[16px] bg-sheet border border-hairline shadow-[0_16px_40px_-12px_rgba(15,23,42,0.18)] p-3 space-y-3">
             <nav aria-label="Navigasi seluler" className="space-y-1">
+              <button
+                type="button"
+                onClick={() => handleNavClick('beranda')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-control text-sm ${
+                  activeTab === 'beranda'
+                    ? 'bg-brand-soft text-brand font-semibold'
+                    : 'text-ink-secondary hover:bg-well hover:text-ink'
+                }`}
+              >
+                <Home className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                <span>Beranda Program</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => handleNavClick('arisan')}
@@ -469,10 +507,10 @@ export const AppShell: React.FC<AppShellProps> = ({
         )}
       </div>
 
-      {/* Centered White Workspace Sheet */}
-      <div className="flex-1 px-3 sm:px-5 pt-4 pb-8 min-w-0">
-        <main className="max-w-[1260px] mx-auto bg-sheet border border-hairline rounded-sheet min-w-0 print-sheet">
-          <div className="px-4 py-5 sm:px-7 sm:py-6">{children}</div>
+      {/* Centered Warm Workspace Sheet */}
+      <div className="flex-1 px-3 sm:px-6 pt-5 pb-10 min-w-0">
+        <main className="max-w-[1220px] mx-auto bg-sheet border border-hairline rounded-sheet min-w-0 print-sheet">
+          <div className="px-5 py-6 sm:px-9 sm:py-8">{children}</div>
         </main>
       </div>
     </div>

@@ -14,6 +14,7 @@ import { BASELINE_PHASES } from '../data/housingConfig';
 import { formatRupiah, formatArea, formatPercent } from '../lib/formatters';
 import { parseSafeNumber, housingProfileSchema } from '../lib/validation';
 import { HouseBlueprint } from './HouseBlueprint';
+import { AnimatedNumber } from './AnimatedNumber';
 import {
   Check,
   ChevronDown,
@@ -207,12 +208,18 @@ export const PlannerWorkspace: React.FC<PlannerWorkspaceProps> = ({
             Nilai aset setelah penyusutan {profile.usiaBangunanTahun} thn:{' '}
             <span className="font-semibold text-btnred tabular-nums">
               {formatRupiah(valuation.depreciatedPropertyValue, true)}
-            </span>{' '}
-            → diproyeksikan tumbuh menjadi{' '}
-            <span className="font-semibold text-brand tabular-nums">
-              {formatRupiah(valuation.projectedNewPropertyValue, true)}
-            </span>{' '}
-            pasca renovasi {selectedCount} modul.
+            </span>
+            {selectedCount > 0 ? (
+              <>
+                {' '}→ diproyeksikan tumbuh menjadi{' '}
+                <span className="font-semibold text-brand tabular-nums">
+                  {formatRupiah(valuation.projectedNewPropertyValue, true)}
+                </span>{' '}
+                pasca renovasi {selectedCount} modul.
+              </>
+            ) : (
+              ' · Kondisi rumah eksisting BTN (centang modul pengembangan di kanan untuk simulasi renovasi).'
+            )}
           </p>
         </div>
 
@@ -243,22 +250,42 @@ export const PlannerWorkspace: React.FC<PlannerWorkspaceProps> = ({
         <div className="p-4 sm:p-5 rounded-card btn-kpi-surface text-white flex flex-col justify-between relative overflow-hidden">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[13px] font-medium text-blue-100">
-              Nilai total setelah renovasi
+              {selectedCount > 0 ? 'Nilai total setelah renovasi' : 'Nilai aset kondisi eksisting'}
             </span>
             <span className="w-2.5 h-1 rounded-full bg-btnred flex-shrink-0" aria-hidden="true" />
           </div>
           <div className="mt-2 font-display text-[26px] leading-tight font-bold text-white tabular-nums tracking-tight">
-            {formatRupiah(valuation.projectedNewPropertyValue, true)}
+            <AnimatedNumber
+              value={valuation.projectedNewPropertyValue}
+              format={(n) => formatRupiah(n, true)}
+            />
           </div>
           <div className="mt-2 text-xs tabular-nums flex items-center flex-wrap gap-1.5">
-            <span className="inline-flex items-center px-2 py-0.5 rounded bg-white text-brand font-semibold">
-              {valuation.netAddedValue >= 0 ? '+' : ''}
-              {formatRupiah(valuation.netAddedValue, true)} ekuitas
-            </span>
-            <span className="text-blue-100">
-              ({valuation.roiPercentage >= 0 ? '+' : ''}
-              {valuation.roiPercentage.toFixed(1).replace('.', ',')}% ROI)
-            </span>
+            {selectedCount > 0 ? (
+              <>
+                <span className="inline-flex items-center px-2 py-0.5 rounded bg-white text-brand font-semibold">
+                  <AnimatedNumber
+                    value={valuation.netAddedValue}
+                    format={(n) => `${n >= 0 ? '+' : ''}${formatRupiah(n, true)} ekuitas`}
+                  />
+                </span>
+                <span className="text-blue-100">
+                  (
+                  <AnimatedNumber
+                    value={valuation.roiPercentage}
+                    format={(n) => `${n >= 0 ? '+' : ''}${n.toFixed(1).replace('.', ',')}% ROI`}
+                  />
+                  )
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="inline-flex items-center px-2 py-0.5 rounded bg-white text-brand font-semibold">
+                  Belum ada renovasi
+                </span>
+                <span className="text-blue-100">(0 modul aktif)</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -268,7 +295,10 @@ export const PlannerWorkspace: React.FC<PlannerWorkspaceProps> = ({
             Nilai saat ini (setelah susut)
           </div>
           <div className="mt-1.5 font-display text-[20px] leading-tight font-bold text-ink tabular-nums">
-            {formatRupiah(valuation.depreciatedPropertyValue, true)}
+            <AnimatedNumber
+              value={valuation.depreciatedPropertyValue}
+              format={(n) => formatRupiah(n, true)}
+            />
           </div>
           <div className="mt-1.5 text-xs text-btnred font-medium tabular-nums">
             Susut -{formatRupiah(valuation.depreciationAmount, true)} (-{formatPercent(valuation.depreciationRate)}) · usia {profile.usiaBangunanTahun} thn
@@ -281,26 +311,38 @@ export const PlannerWorkspace: React.FC<PlannerWorkspaceProps> = ({
             Total biaya RAB bertahap
           </div>
           <div className="mt-1.5 font-display text-[20px] leading-tight font-bold text-ink tabular-nums">
-            {formatRupiah(valuation.totalDevelopmentCost)}
+            <AnimatedNumber
+              value={valuation.totalDevelopmentCost}
+              format={(n) => formatRupiah(Math.round(n))}
+            />
           </div>
           <div className="mt-1.5 text-xs text-ink-secondary tabular-nums">
-            {selectedCount} modul aktif · kontingensi {formatPercent(profile.contingencyRate, 0)}
+            {selectedCount > 0
+              ? `${selectedCount} modul aktif · kontingensi ${formatPercent(profile.contingencyRate, 0)}`
+              : 'Belum ada modul renovasi dipilih'}
           </div>
         </div>
 
         {/* Sibling 3: Area & KDB */}
         <div
-          className={`p-4 sm:p-5 rounded-card border border-hairline border-t-[3px] bg-sheet flex flex-col justify-center interactive-surface ${
-            valuation.isKdbOptimal ? 'border-t-positive' : 'border-t-ochre-mid'
-          }`}
+          className={`p-4 sm:p-5 rounded-card border border-hairline border-t-[3px] bg-sheet flex flex-col justify-center interactive-surface ${valuation.isKdbOptimal ? 'border-t-positive' : 'border-t-ochre-mid'
+            }`}
         >
           <div className="text-[13px] font-medium text-ink-secondary">
             Luas akhir & rasio KDB
           </div>
           <div className="mt-1.5 font-display text-[20px] leading-tight font-bold text-ink tabular-nums">
-            {formatArea(valuation.totalBuildingArea)}
+            <AnimatedNumber
+              value={valuation.totalBuildingArea}
+              format={(n) => formatArea(Math.round(n))}
+            />
             <span className="text-[13px] font-sans font-normal text-ink-secondary ml-1.5">
-              (KDB {formatPercent(valuation.kdbRatio)})
+              (KDB{' '}
+              <AnimatedNumber
+                value={valuation.kdbRatio}
+                format={(n) => formatPercent(n)}
+              />
+              )
             </span>
           </div>
           <div className="mt-1.5 text-xs">
@@ -353,8 +395,8 @@ export const PlannerWorkspace: React.FC<PlannerWorkspaceProps> = ({
                   Terisi otomatis dari Kartu Kunci NFC BTN dan dapat disesuaikan untuk uji skenario.
                 </p>
               </div>
-              <span className="text-xs font-medium px-2 py-0.5 rounded bg-brand-soft text-brand border border-brand-border">
-                Standar SNI & MAPPI
+              <span className="text-xs font-medium px-2 py-0.5 rounded bg-ochre-soft text-ochre border border-ochre-border">
+                Asumsi simulasi heuristik
               </span>
             </div>
 
@@ -513,17 +555,32 @@ export const PlannerWorkspace: React.FC<PlannerWorkspaceProps> = ({
                   Modul pengembangan
                 </h2>
                 <p className="text-[13px] text-ink-secondary mt-0.5">
-                  {selectedCount} dari {modules.length} modul aktif · sinkron dengan denah
+                  {selectedCount === 0
+                    ? 'Belum ada modul dipilih · centang untuk mulai simulasi'
+                    : `${selectedCount} dari ${modules.length} modul aktif · sinkron dengan denah`}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowAddCustom((prev) => !prev)}
-                className="inline-flex items-center gap-1 h-8 px-2.5 rounded-control border border-brand-border bg-brand-soft hover:bg-brand hover:text-white text-[13px] font-medium text-brand transition-colors flex-shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Tambah ruang</span>
-              </button>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {selectedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onModulesChange(modules.map((m) => ({ ...m, isSelected: false })))
+                    }
+                    className="h-8 px-2.5 rounded-control border border-control bg-sheet hover:bg-well text-xs font-medium text-ink-secondary hover:text-ink transition-colors"
+                  >
+                    Kosongkan
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowAddCustom((prev) => !prev)}
+                  className="inline-flex items-center gap-1 h-8 px-2.5 rounded-control border border-brand-border bg-brand-soft hover:bg-brand hover:text-white text-[13px] font-medium text-brand transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Tambah ruang</span>
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-4 border-b border-rule -mb-4 pt-1 overflow-x-auto">
@@ -541,11 +598,10 @@ export const PlannerWorkspace: React.FC<PlannerWorkspaceProps> = ({
                     key={tab.id}
                     type="button"
                     onClick={() => setPhaseFilter(tab.id)}
-                    className={`pb-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
-                      active
-                        ? 'border-brand text-brand'
-                        : 'border-transparent text-ink-secondary hover:text-ink'
-                    }`}
+                    className={`pb-2.5 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${active
+                      ? 'border-brand text-brand'
+                      : 'border-transparent text-ink-secondary hover:text-ink'
+                      }`}
                   >
                     {tab.label}
                   </button>
@@ -648,8 +704,8 @@ export const PlannerWorkspace: React.FC<PlannerWorkspaceProps> = ({
                   m.selectedPhase === 'tahap-1'
                     ? 'bg-brand border-brand'
                     : m.selectedPhase === 'tahap-2'
-                    ? 'bg-ochre-mid border-ochre-mid'
-                    : 'bg-tealarch border-tealarch';
+                      ? 'bg-ochre-mid border-ochre-mid'
+                      : 'bg-tealarch border-tealarch';
 
                 return (
                   <div
@@ -665,11 +721,10 @@ export const PlannerWorkspace: React.FC<PlannerWorkspaceProps> = ({
                             aria-checked={m.isSelected}
                             aria-label={`Pilih modul ${m.name}`}
                             onClick={() => onToggleModule(m.id)}
-                            className={`mt-0.5 w-[18px] h-[18px] rounded-[4px] border flex items-center justify-center flex-shrink-0 transition-colors ${
-                              m.isSelected
-                                ? `${checkBg} text-white`
-                                : 'bg-sheet border-control hover:border-brand'
-                            }`}
+                            className={`mt-0.5 w-[18px] h-[18px] rounded-[4px] border flex items-center justify-center flex-shrink-0 transition-colors ${m.isSelected
+                              ? `${checkBg} text-white`
+                              : 'bg-sheet border-control hover:border-brand'
+                              }`}
                           >
                             {m.isSelected && (
                               <Check className="w-3 h-3 stroke-[3]" aria-hidden="true" />
@@ -680,9 +735,8 @@ export const PlannerWorkspace: React.FC<PlannerWorkspaceProps> = ({
                             <button
                               type="button"
                               onClick={() => onToggleModule(m.id)}
-                              className={`text-left text-sm font-medium leading-snug block ${
-                                m.isSelected ? 'text-ink' : 'text-ink-secondary'
-                              }`}
+                              className={`text-left text-sm font-medium leading-snug block ${m.isSelected ? 'text-ink' : 'text-ink-secondary'
+                                }`}
                             >
                               {m.name}
                             </button>
@@ -704,9 +758,8 @@ export const PlannerWorkspace: React.FC<PlannerWorkspaceProps> = ({
                         <div className="flex items-start gap-1.5 flex-shrink-0">
                           <div className="text-right">
                             <div
-                              className={`text-sm tabular-nums ${
-                                m.isSelected ? 'font-semibold text-ink' : 'text-ink-secondary'
-                              }`}
+                              className={`text-sm tabular-nums ${m.isSelected ? 'font-semibold text-ink' : 'text-ink-secondary'
+                                }`}
                             >
                               {formatRupiah(subtotal, true)}
                             </div>
@@ -911,10 +964,10 @@ export const PlannerWorkspace: React.FC<PlannerWorkspaceProps> = ({
                                 modules.map((mod) =>
                                   mod.id === m.id
                                     ? {
-                                        ...mod,
-                                        customMaterialRatio: mat,
-                                        customLaborRatio: parseFloat((1 - mat).toFixed(2)),
-                                      }
+                                      ...mod,
+                                      customMaterialRatio: mat,
+                                      customLaborRatio: parseFloat((1 - mat).toFixed(2)),
+                                    }
                                     : mod
                                 )
                               );

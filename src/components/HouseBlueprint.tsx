@@ -90,9 +90,27 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
 
   const getMod = (id?: string) => (id ? modules.find((m) => m.id === id) : undefined);
   const modDak = getMod('modul-dak-lantai2');
+  const hasKanopiActive = Boolean(getMod('modul-kanopi-carport')?.isSelected);
+  const activeTemplate = HOUSE_TEMPLATES.find((t) => t.id === templateId) || HOUSE_TEMPLATES[0];
 
-  const visibleRooms = rooms.filter((r) => r.floor === floorView);
-  const selectedRoom = rooms.find((r) => r.id === selectedRoomId) || null;
+  const categoryPillClass = (cat: typeof activeTemplate.programCategory) => {
+    if (cat === 'subsidi-flpp') return 'bg-positive-soft text-positive border-positive-border';
+    if (cat === 'kpr-komersial') return 'bg-ochre-soft text-ochre border-ochre-border';
+    return 'bg-brand-soft text-brand border-brand-border';
+  };
+
+  const visibleRooms = rooms.filter((r) => {
+    if (r.floor !== floorView) return false;
+    if (r.kind === 'module') {
+      return Boolean(getMod(r.moduleId)?.isSelected);
+    }
+    // Saat modul Kanopi Carport aktif, gantikan carport terbuka bawaan agar tidak tumpang tindih
+    if (r.id === 'room-carport-base' && hasKanopiActive) {
+      return false;
+    }
+    return true;
+  });
+  const selectedRoom = visibleRooms.find((r) => r.id === selectedRoomId) || null;
   const selectedMod = selectedRoom?.moduleId ? getMod(selectedRoom.moduleId) : undefined;
 
   // Dynamic true-scale layout math inside 700 x 415 viewBox (room for axis bubbles & compass)
@@ -204,6 +222,53 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
 
   // Visual palette per room status & phase
   const getRoomTheme = (room: FloorRoom) => {
+    if (room.kind === 'existing' && room.isOutdoor) {
+      if (room.furniture === 'carport') {
+        return {
+          fill: '#EEF2F6',
+          wallFill: 'transparent',
+          stroke: '#94A3B8',
+          strokeWidth: 1.4,
+          dash: '4 3',
+          textColor: '#334155',
+          subColor: '#64748B',
+          furnitureColor: '#94A3B8',
+          doorColor: '#475569',
+          doorFanColor: '#64748B',
+          badgeColor: '#64748B',
+        };
+      }
+      if (room.furniture === 'terrace') {
+        return {
+          fill: '#F4EFE6',
+          wallFill: 'transparent',
+          stroke: '#94A3B8',
+          strokeWidth: 1.3,
+          dash: undefined,
+          textColor: '#334155',
+          subColor: '#64748B',
+          furnitureColor: '#CBD5E1',
+          doorColor: '#475569',
+          doorFanColor: '#64748B',
+          badgeColor: '#64748B',
+        };
+      }
+      // Semi-outdoor kitchen slab (e.g. Tipe 21/60 FLPP)
+      return {
+        fill: '#F6F3EC',
+        wallFill: 'transparent',
+        stroke: '#64748B',
+        strokeWidth: 1.5,
+        dash: '5 3',
+        textColor: '#1E293B',
+        subColor: '#475569',
+        furnitureColor: '#94A3B8',
+        doorColor: '#334155',
+        doorFanColor: '#64748B',
+        badgeColor: '#475569',
+      };
+    }
+
     if (room.kind === 'existing') {
       return {
         fill: '#FAF8F4',
@@ -324,10 +389,25 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
     const getSingleGeometry = () => {
       const r = singleSpan;
       if (wall === 'bottom') {
-        // Place hinge cleanly near the right edge so the open 90° leaf hugs the right wall
+        if (room.doorAlign === 'start') {
+          // Hinge near left edge so open 90° leaf hugs left wall (ideal for KT 2 opening to Ruang Keluarga)
+          const hx = rx + Math.min(rw * 0.14, 10);
+          const hy = ry + rh;
+          const leafX = hx + r * cosA;
+          const leafY = hy - r * sinA;
+          const openX = hx;
+          const openY = hy - r;
+          return {
+            cut: { x1: hx, y1: hy, x2: hx + r, y2: hy },
+            hinge: { x: hx, y: hy },
+            leafEnd: { x: leafX, y: leafY },
+            arcPath: `M ${hx + r} ${hy} A ${r} ${r} 0 0 0 ${leafX} ${leafY}`,
+            fanPath: `M ${hx} ${hy} L ${hx + r} ${hy} A ${r} ${r} 0 0 0 ${openX} ${openY} Z`,
+          };
+        }
+        // Default ('end'): hinge near right edge so open 90° leaf hugs right wall
         const hx = rx + rw - Math.min(rw * 0.14, 10);
         const hy = ry + rh;
-        // Closed vector: (-r, 0), Open inward (up): (0, -r)
         const leafX = hx - r * cosA;
         const leafY = hy - r * sinA;
         const openX = hx;
@@ -341,9 +421,23 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
         };
       }
       if (wall === 'top') {
+        if (room.doorAlign === 'end') {
+          const hx = rx + rw - Math.min(rw * 0.14, 10);
+          const hy = ry;
+          const leafX = hx - r * cosA;
+          const leafY = hy + r * sinA;
+          const openX = hx;
+          const openY = hy + r;
+          return {
+            cut: { x1: hx - r, y1: hy, x2: hx, y2: hy },
+            hinge: { x: hx, y: hy },
+            leafEnd: { x: leafX, y: leafY },
+            arcPath: `M ${hx - r} ${hy} A ${r} ${r} 0 0 0 ${leafX} ${leafY}`,
+            fanPath: `M ${hx} ${hy} L ${hx - r} ${hy} A ${r} ${r} 0 0 0 ${openX} ${openY} Z`,
+          };
+        }
         const hx = rx + Math.min(rw * 0.14, 10);
         const hy = ry;
-        // Closed vector: (+r, 0), Open inward (down): (0, +r)
         const leafX = hx + r * cosA;
         const leafY = hy + r * sinA;
         const openX = hx;
@@ -555,13 +649,27 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
     strokeColor: string,
     isActive: boolean
   ) => {
-    if (!isActive || rw < 52 || rh < 48) return null;
-    const pad = 9;
+    if (!isActive || (room.furniture !== 'terrace' && (rw < 52 || rh < 48))) return null;
+    const pad = 8;
 
     switch (room.furniture) {
+      case 'terrace': {
+        const stepCount = Math.max(3, Math.floor(rh / 24));
+        return (
+          <g fill="none" stroke={strokeColor} strokeWidth="0.9" opacity="0.55" pointerEvents="none">
+            {Array.from({ length: stepCount - 1 }).map((_, i) => {
+              const ly = ry + ((i + 1) * rh) / stepCount;
+              return <line key={i} x1={rx + 4} y1={ly} x2={rx + rw - 4} y2={ly} />;
+            })}
+            <line x1={rx + rw * 0.5} y1={ry + 4} x2={rx + rw * 0.5} y2={ry + rh - 4} strokeOpacity="0.45" />
+            {/* Front porch step edge */}
+            <line x1={rx + 4} y1={ry + 6} x2={rx + 4} y2={ry + rh - 6} stroke="#94A3B8" strokeWidth="1.2" />
+          </g>
+        );
+      }
       case 'bed-double': {
         const bw = Math.min(rw - pad * 2, 54);
-        const bh = Math.min(rh * 0.4, 40);
+        const bh = Math.min(rh * 0.38, 40);
         return (
           <g fill="none" stroke={strokeColor} strokeWidth="1.1" opacity="0.85" pointerEvents="none">
             <rect x={rx + pad} y={ry + pad} width={bw} height={bh} rx="2" />
@@ -582,35 +690,42 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
         );
       }
       case 'bath': {
+        // Place toilet + floor drain opposite the left door so fixtures never collide with door swing or centered label
+        const tx = room.doorWall === 'left' ? rx + rw - pad - 14 : rx + pad;
         return (
           <g fill="none" stroke={strokeColor} strokeWidth="1.05" opacity="0.85" pointerEvents="none">
-            <rect x={rx + pad} y={ry + pad} width={13} height={8} rx="2" />
-            <ellipse cx={rx + pad + 6.5} cy={ry + pad + 15} rx="5.5" ry="6.5" />
-            {rw > 64 && <rect x={rx + rw - pad - 14} y={ry + pad} width={14} height={11} rx="3" />}
+            <rect x={tx} y={ry + pad} width={13} height={7} rx="1.8" />
+            <ellipse cx={tx + 6.5} cy={ry + pad + 13} rx="5" ry="5.8" />
+            {rh >= 68 && (
+              <g>
+                <rect x={tx + 2} y={ry + rh - pad - 11} width={11} height={11} rx="2" />
+                <circle cx={tx + 7.5} cy={ry + rh - pad - 5.5} r="2.2" />
+              </g>
+            )}
           </g>
         );
       }
       case 'living': {
-        const sw = Math.min(rw * 0.34, 74);
-        const sh = Math.min(rh * 0.26, 32);
+        const sw = Math.min(rw * 0.36, 72);
+        const sh = Math.min(rh * 0.26, 30);
         return (
           <g fill="none" stroke={strokeColor} strokeWidth="1.1" opacity="0.85" pointerEvents="none">
             <path
-              d={`M ${rx + rw * 0.22} ${ry + rh - pad - sh} H ${rx + rw * 0.22 + sw} V ${ry + rh - pad} H ${rx + rw * 0.22 + sw - 15} V ${ry + rh - pad - sh + 13} H ${rx + rw * 0.22} Z`}
+              d={`M ${rx + rw * 0.24} ${ry + rh - pad - sh} H ${rx + rw * 0.24 + sw} V ${ry + rh - pad} H ${rx + rw * 0.24 + sw - 14} V ${ry + rh - pad - sh + 12} H ${rx + rw * 0.24} Z`}
             />
             <rect
-              x={rx + rw * 0.22 + 12}
-              y={ry + rh - pad - sh - 16}
-              width={Math.min(38, sw * 0.55)}
-              height={11}
+              x={rx + rw * 0.24 + 12}
+              y={ry + rh - pad - sh - 15}
+              width={Math.min(36, sw * 0.52)}
+              height={10}
               rx="2"
             />
             {rw > 180 && (
               <rect
-                x={rx + rw - pad - 52}
-                y={ry + rh - pad - 32}
-                width={44}
-                height={24}
+                x={rx + rw - pad - 44}
+                y={ry + rh - pad - 28}
+                width={38}
+                height={20}
                 rx="2"
               />
             )}
@@ -618,13 +733,18 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
         );
       }
       case 'kitchen': {
+        // Neat countertop along top wall with sink + 2-burner stove (clear of rear door and centered label)
+        const counterW = Math.min(rw - pad * 2 - 6, 74);
+        const counterX = rx + pad + 2;
+        const counterY = ry + 6;
         return (
-          <g fill="none" stroke={strokeColor} strokeWidth="1.1" opacity="0.9" pointerEvents="none">
-            <path
-              d={`M ${rx + rw - pad - 42} ${ry + rh - pad} V ${ry + rh - pad - 17} H ${rx + rw - pad - 17} V ${ry + pad + 14} H ${rx + rw - pad}`}
-            />
-            <circle cx={rx + rw - pad - 32} cy={ry + rh - pad - 8.5} r="3.2" />
-            <circle cx={rx + rw - pad - 23} cy={ry + rh - pad - 8.5} r="3.2" />
+          <g fill="none" stroke={strokeColor} strokeWidth="1.05" opacity="0.9" pointerEvents="none">
+            <rect x={counterX} y={counterY} width={counterW} height={14} rx="1.5" />
+            {/* Sink basin */}
+            <rect x={counterX + 4} y={counterY + 2.5} width={Math.min(18, counterW * 0.3)} height={9} rx="1.5" />
+            {/* 2-burner stove */}
+            <circle cx={counterX + counterW - 15} cy={counterY + 7} r="3" />
+            <circle cx={counterX + counterW - 7} cy={counterY + 7} r="3" />
           </g>
         );
       }
@@ -709,11 +829,23 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
       {/* Studio Header: Title + Architectural Actions + Floor Toggle */}
       <div className="px-4 py-3 border-b border-rule flex flex-wrap items-center justify-between gap-2.5">
         <div>
-          <h2 className="font-display text-[15px] font-semibold text-ink">
-            {compact ? 'Denah arsitektural rumah tumbuh' : 'Editor denah arsitektural'}
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="font-display text-[15px] font-semibold text-ink">
+              {compact ? 'Denah arsitektural rumah tumbuh' : 'Editor denah arsitektural'}
+            </h2>
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${categoryPillClass(
+                activeTemplate.programCategory
+              )}`}
+            >
+              {activeTemplate.programBadge}
+            </span>
+          </div>
           <p className="text-[13px] text-ink-secondary mt-0.5">
-            Kavling {lotWidth} × {lotLength} m ({formatArea(profile.luasTanah)}) · Bangunan {formatArea(profile.luasBangunanEksisting)} menjadi {formatArea(valuation.totalBuildingArea)}
+            Kavling {lotWidth} × {lotLength} m ({formatArea(profile.luasTanah)}) ·{' '}
+            {valuation.addedBuildingArea > 0
+              ? `Bangunan ${formatArea(profile.luasBangunanEksisting)} menjadi ${formatArea(valuation.totalBuildingArea)}`
+              : `Bangunan eksisting ${formatArea(profile.luasBangunanEksisting)} (belum ada renovasi)`}
           </p>
         </div>
 
@@ -724,11 +856,10 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
               type="button"
               onClick={() => setDoorsOpen((prev) => !prev)}
               aria-pressed={doorsOpen}
-              className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-control border text-[13px] font-medium transition-colors ${
-                doorsOpen
-                  ? 'bg-brand-soft border-brand-border text-brand'
-                  : 'bg-sheet border-control text-ink-secondary hover:text-ink'
-              }`}
+              className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-control border text-[13px] font-medium transition-colors ${doorsOpen
+                ? 'bg-brand-soft border-brand-border text-brand'
+                : 'bg-sheet border-control text-ink-secondary hover:text-ink'
+                }`}
               title="Simulasi bukaan daun pintu 90 derajat untuk cek ruang sirkulasi"
             >
               <DoorOpen className="w-3.5 h-3.5" aria-hidden="true" />
@@ -768,11 +899,10 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
                   onFloorViewChange('lt1');
                   setSelectedRoomId(null);
                 }}
-                className={`px-2.5 py-1 rounded-[6px] text-[13px] font-medium transition-colors ${
-                  floorView === 'lt1'
-                    ? 'bg-brand text-white'
-                    : 'text-ink-secondary hover:text-ink'
-                }`}
+                className={`px-2.5 py-1 rounded-[6px] text-[13px] font-medium transition-colors ${floorView === 'lt1'
+                  ? 'bg-brand text-white'
+                  : 'text-ink-secondary hover:text-ink'
+                  }`}
               >
                 Lt. 1
               </button>
@@ -784,11 +914,10 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
                   onFloorViewChange('lt2');
                   setSelectedRoomId(null);
                 }}
-                className={`px-2.5 py-1 rounded-[6px] text-[13px] font-medium transition-colors flex items-center gap-1.5 ${
-                  floorView === 'lt2'
-                    ? 'bg-tealarch text-white'
-                    : 'text-ink-secondary hover:text-ink'
-                }`}
+                className={`px-2.5 py-1 rounded-[6px] text-[13px] font-medium transition-colors flex items-center gap-1.5 ${floorView === 'lt2'
+                  ? 'bg-tealarch text-white'
+                  : 'text-ink-secondary hover:text-ink'
+                  }`}
               >
                 <span>Lt. 2</span>
                 {modDak?.isSelected && floorView !== 'lt2' && (
@@ -802,37 +931,57 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
 
       {/* Template Selector Strip */}
       {!compact && (
-        <div className="px-4 py-2.5 bg-well/80 border-b border-rule flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[13px] font-medium text-ink-secondary mr-1">
-              Tipe kavling:
-            </span>
-            {HOUSE_TEMPLATES.map((tpl) => {
-              const active = tpl.id === templateId;
-              return (
-                <button
-                  key={tpl.id}
-                  type="button"
-                  onClick={() => {
-                    onSelectTemplate(tpl.id);
-                    setSelectedRoomId(null);
-                  }}
-                  className={`h-7 px-2.5 rounded-control text-xs font-medium border transition-colors ${
-                    active
+        <div className="px-4 py-2.5 bg-well/80 border-b border-rule space-y-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[13px] font-medium text-ink-secondary mr-0.5">
+                Tipe kavling:
+              </span>
+              {HOUSE_TEMPLATES.map((tpl) => {
+                const active = tpl.id === templateId;
+                const tagShort =
+                  tpl.programCategory === 'subsidi-flpp'
+                    ? 'FLPP'
+                    : tpl.programCategory === 'kpr-komersial'
+                      ? 'Komersial'
+                      : 'FLPP/Kom';
+                return (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => {
+                      onSelectTemplate(tpl.id);
+                      setSelectedRoomId(null);
+                    }}
+                    className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-control text-xs font-medium border transition-colors ${active
                       ? 'bg-brand-soft text-brand border-brand-border'
                       : 'bg-sheet text-ink-secondary border-hairline hover:border-control hover:text-ink'
-                  }`}
-                >
-                  {tpl.shortLabel}
-                </button>
-              );
-            })}
+                      }`}
+                  >
+                    <span>{tpl.shortLabel}</span>
+                    <span
+                      className={`text-[10px] px-1 py-0.2 rounded font-semibold ${tpl.programCategory === 'subsidi-flpp'
+                        ? 'bg-positive-soft text-positive'
+                        : tpl.programCategory === 'kpr-komersial'
+                          ? 'bg-ochre-soft text-ochre'
+                          : 'bg-well text-ink-secondary'
+                        }`}
+                    >
+                      {tagShort}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <span className="text-xs text-ink-secondary inline-flex items-center gap-1.5">
-            <Move className="w-3.5 h-3.5 text-brand" aria-hidden="true" />
-            <span>Klik ruang untuk ubah pintu & ukuran, atau seret langsung</span>
-          </span>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-secondary">
+            <span>{activeTemplate.regulationBasis}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <Move className="w-3.5 h-3.5 text-brand" aria-hidden="true" />
+              <span>Klik ruang untuk ubah pintu & ukuran, atau seret langsung</span>
+            </span>
+          </div>
         </div>
       )}
 
@@ -1041,22 +1190,97 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
               fill="url(#lotSnapGrid)"
             />
 
-            {/* Subtle Botanical Foliage & Stepping Stones on Ground Floor Lawn */}
-            {floorView === 'lt1' && (
-              <g pointerEvents="none" opacity="0.78">
-                <circle cx={originX + 26} cy={originY + lotPxH - 28} r="14" fill="#DDF0E3" stroke="#8CC3A0" strokeWidth="1.1" />
-                <circle cx={originX + 26} cy={originY + lotPxH - 28} r="2.5" fill="#4E9468" />
-                <circle cx={originX + lotPxW - 22} cy={originY + lotPxH - 22} r="10" fill="#DDF0E3" stroke="#8CC3A0" strokeWidth="1" />
-                {/* Entrance walkway stones */}
-                <rect x={originX + 56} y={originY + lotPxH - 54} width="24" height="8" rx="1.5" fill="#FFFFFF" stroke="#CBD5E1" strokeWidth="0.9" />
-                <rect x={originX + 88} y={originY + lotPxH - 54} width="24" height="8" rx="1.5" fill="#FFFFFF" stroke="#CBD5E1" strokeWidth="0.9" />
-              </g>
-            )}
+            {/* Subtle Botanical Foliage, Stepping Stones & Open Yard Labels on Ground Floor Lawn */}
+            {floorView === 'lt1' && (() => {
+              const existingEnclosed = rooms.filter((r) => r.floor === 'lt1' && r.kind === 'existing' && !r.isOutdoor);
+              const coreMaxX = existingEnclosed.reduce((mx, r) => Math.max(mx, r.x + r.w), 8);
+              const coreMaxY = existingEnclosed.reduce((my, r) => Math.max(my, r.y + r.h), 6);
+              const terasRoom = rooms.find((r) => r.id === 'room-teras');
+              const frontLawnW = terasRoom ? terasRoom.x : 2.2;
+              const frontLawnY = terasRoom ? terasRoom.y : lotWidth / 2;
+              const frontLawnH = terasRoom ? terasRoom.h : lotWidth / 2;
+              const hasRearModules = visibleRooms.some((r) => r.kind === 'module' && r.x >= coreMaxX - 0.5);
+              const hasSideModule = visibleRooms.some((r) => r.kind === 'module' && r.y >= coreMaxY - 0.5);
 
-            {/* Lantai 2 Ghosted Reference of Ground Floor Core */}
+              return (
+                <g pointerEvents="none">
+                  {/* Front Garden foliage & stepping stones */}
+                  <g opacity="0.78">
+                    <circle cx={originX + 20} cy={originY + lotPxH - 24} r="12" fill="#DDF0E3" stroke="#8CC3A0" strokeWidth="1.1" />
+                    <circle cx={originX + 20} cy={originY + lotPxH - 24} r="2.2" fill="#4E9468" />
+                    <circle cx={originX + lotPxW - 22} cy={originY + lotPxH - 22} r="10" fill="#DDF0E3" stroke="#8CC3A0" strokeWidth="1" />
+                    <rect x={originX + 42} y={originY + (frontLawnY + frontLawnH * 0.58) * pxPerMeter} width="22" height="7" rx="1.5" fill="#FFFFFF" stroke="#CBD5E1" strokeWidth="0.9" />
+                    <rect x={originX + 70} y={originY + (frontLawnY + frontLawnH * 0.58) * pxPerMeter} width="22" height="7" rx="1.5" fill="#FFFFFF" stroke="#CBD5E1" strokeWidth="0.9" />
+                  </g>
+
+                  {/* Taman Depan Label */}
+                  {frontLawnW >= 1.4 && (
+                    <text
+                      x={originX + (frontLawnW / 2) * pxPerMeter}
+                      y={originY + (frontLawnY + frontLawnH * 0.34) * pxPerMeter}
+                      textAnchor="middle"
+                      fill="#2F6F4E"
+                      fontSize={frontLawnW < 1.8 ? '9' : '10'}
+                      fontWeight="600"
+                      fontFamily="IBM Plex Sans, sans-serif"
+                      opacity="0.88"
+                    >
+                      Taman Depan
+                    </text>
+                  )}
+
+                  {/* Halaman Belakang / Sisa Lahan Label */}
+                  {!hasRearModules && lotLength - coreMaxX >= 1.2 && (
+                    <g>
+                      <text
+                        x={originX + ((coreMaxX + lotLength) / 2) * pxPerMeter}
+                        y={originY + (coreMaxY / 2) * pxPerMeter - 5}
+                        textAnchor="middle"
+                        fill="#2F6F4E"
+                        fontSize={lotLength - coreMaxX < 1.8 ? '9.5' : '10.5'}
+                        fontWeight="600"
+                        fontFamily="IBM Plex Sans, sans-serif"
+                        opacity="0.9"
+                      >
+                        {lotLength - coreMaxX < 1.8 ? 'Hal. Belakang' : 'Halaman Belakang'}
+                      </text>
+                      <text
+                        x={originX + ((coreMaxX + lotLength) / 2) * pxPerMeter}
+                        y={originY + (coreMaxY / 2) * pxPerMeter + 9}
+                        textAnchor="middle"
+                        fill="#4E8A6A"
+                        fontSize="9"
+                        fontFamily="IBM Plex Mono, monospace"
+                        opacity="0.85"
+                      >
+                        Sisa {(lotLength - coreMaxX).toFixed(1)}×{coreMaxY.toFixed(0)} m
+                      </text>
+                    </g>
+                  )}
+
+                  {/* Taman Samping Label (Kavling Hook) */}
+                  {!hasSideModule && lotWidth - coreMaxY >= 1.5 && (
+                    <text
+                      x={originX + (lotLength * 0.5) * pxPerMeter}
+                      y={originY + ((coreMaxY + lotWidth) / 2) * pxPerMeter + 4}
+                      textAnchor="middle"
+                      fill="#2F6F4E"
+                      fontSize="10.5"
+                      fontWeight="600"
+                      fontFamily="IBM Plex Sans, sans-serif"
+                      opacity="0.9"
+                    >
+                      Taman Samping (Lahan Hook {(lotWidth - coreMaxY).toFixed(0)} m)
+                    </text>
+                  )}
+                </g>
+              );
+            })()}
+
+            {/* Lantai 2 Ghosted Reference of Ground Floor Enclosed Core */}
             {floorView === 'lt2' &&
               rooms
-                .filter((r) => r.floor === 'lt1' && r.kind === 'existing')
+                .filter((r) => r.floor === 'lt1' && r.kind === 'existing' && !r.isOutdoor)
                 .map((r) => (
                   <rect
                     key={`ghost-${r.id}`}
@@ -1073,6 +1297,43 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
                   />
                 ))}
 
+            {floorView === 'lt2' && visibleRooms.length === 0 && (
+              <g pointerEvents="none">
+                <rect
+                  x={originX + lotPxW * 0.18}
+                  y={originY + lotPxH * 0.36}
+                  width={lotPxW * 0.64}
+                  height={66}
+                  rx="8"
+                  fill="#FFFFFF"
+                  fillOpacity="0.92"
+                  stroke="#CBD5E1"
+                  strokeWidth="1"
+                />
+                <text
+                  x={originX + lotPxW / 2}
+                  y={originY + lotPxH * 0.36 + 27}
+                  textAnchor="middle"
+                  fill="#1E293B"
+                  fontSize="11.5"
+                  fontWeight="600"
+                  fontFamily="IBM Plex Sans, sans-serif"
+                >
+                  Belum ada modul Lantai 2 yang aktif
+                </text>
+                <text
+                  x={originX + lotPxW / 2}
+                  y={originY + lotPxH * 0.36 + 46}
+                  textAnchor="middle"
+                  fill="#64748B"
+                  fontSize="10"
+                  fontFamily="IBM Plex Sans, sans-serif"
+                >
+                  Centang &quot;Pengembangan Lantai 2 / Dak Beton Cor&quot; di panel kanan
+                </text>
+              </g>
+            )}
+
             {/* Render Interactive Draggable & Resizable Architectural Rooms */}
             {visibleRooms.map((room) => {
               const rx = originX + room.x * pxPerMeter;
@@ -1085,22 +1346,31 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
               const theme = getRoomTheme(room);
               const areaSqm = Number((room.w * room.h).toFixed(1));
               const displayArea = mod?.isSelected ? mod.customVolume || mod.defaultVolume : areaSqm;
+              const isEnclosedRoom = isActive && !room.isOutdoor && room.furniture !== 'carport';
 
               const labelY =
                 room.furniture === 'carport' && isActive
-                  ? ry + rh - 30
-                  : room.furniture === 'bed-double' && isActive
-                  ? ry + rh * 0.56
-                  : room.furniture === 'living' && isActive && rh >= 100
-                  ? ry + 26
-                  : room.furniture === 'bath' && isActive
-                  ? ry + rh * 0.52
-                  : ry + rh / 2 - 6;
+                  ? ry + rh - 28
+                  : room.furniture === 'terrace'
+                    ? ry + rh / 2 - 4
+                    : room.furniture === 'bed-double' && isActive
+                      ? ry + rh * 0.58
+                      : room.furniture === 'bed-single' && isActive
+                        ? ry + rh * 0.56
+                        : room.furniture === 'living' && isActive && rh >= 100
+                          ? ry + 28
+                          : room.furniture === 'kitchen' && isActive
+                            ? ry + Math.max(38, rh * 0.56)
+                            : room.furniture === 'bath' && isActive
+                              ? ry + rh * 0.54
+                              : ry + rh / 2 - 6;
 
               const labelX =
-                room.furniture === 'bed-double' && isActive && room.doorWall === 'bottom'
+                room.furniture === 'bath' && isActive && room.doorWall === 'left'
                   ? rx + rw * 0.44
-                  : rx + rw / 2;
+                  : room.furniture === 'bed-double' && isActive && room.doorWall === 'bottom'
+                    ? rx + rw * 0.45
+                    : rx + rw / 2;
 
               return (
                 <g
@@ -1138,7 +1408,7 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
                   />
 
                   {/* Subtle Double-Line Inner Wall for Enclosed Active Rooms (15cm brickwork look) */}
-                  {isActive && room.furniture !== 'carport' && rw > 36 && rh > 36 && (
+                  {isEnclosedRoom && rw > 36 && rh > 36 && (
                     <rect
                       x={rx + 3}
                       y={ry + 3}
@@ -1161,8 +1431,8 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
                   {/* Authentic Architectural Door Swing / Sliding Simulation */}
                   {renderArchitecturalDoor(room, rx, ry, rw, rh, theme, isActive)}
 
-                  {/* Structural Concrete Columns (Kolom Praktis 15x15cm) at corners of active rooms */}
-                  {isActive && room.furniture !== 'carport' && (
+                  {/* Structural Concrete Columns (Kolom Praktis 15x15cm) at corners of enclosed rooms */}
+                  {isEnclosedRoom && (
                     <g fill={isSelected ? '#0D4A8C' : theme.stroke} pointerEvents="none">
                       <rect x={rx - 2.5} y={ry - 2.5} width="5" height="5" />
                       <rect x={rx + rw - 2.5} y={ry - 2.5} width="5" height="5" />
@@ -1177,21 +1447,21 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
                     y={labelY}
                     textAnchor="middle"
                     fill={theme.textColor}
-                    fontSize={rw < 82 ? '10.5' : '11.5'}
+                    fontSize={rw < 58 ? '9.5' : rw < 88 ? '10.5' : '11.5'}
                     fontWeight="600"
                     fontFamily="IBM Plex Sans, sans-serif"
                     pointerEvents="none"
                   >
-                    {!isActive && room.kind === 'module' ? `+ ${room.label}` : room.label}
+                    {room.label}
                   </text>
 
                   {rh >= 54 && (
                     <text
                       x={labelX}
-                      y={labelY + 13}
+                      y={labelY + 12.5}
                       textAnchor="middle"
                       fill={theme.subColor}
-                      fontSize="10"
+                      fontSize={rw < 58 ? '8.5' : '9.5'}
                       fontFamily="IBM Plex Mono, monospace"
                       pointerEvents="none"
                     >
@@ -1202,14 +1472,14 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
                   )}
 
                   {/* Authentic Floor Elevation Tag (±0.00 / -0.05 / -0.15 / +3.40) */}
-                  {isActive && room.elevation && rh >= 86 && rw >= 82 && (
+                  {isActive && room.elevation && rh >= 94 && rw >= 88 && (
                     <text
                       x={labelX}
-                      y={labelY + 25}
+                      y={labelY + 24}
                       textAnchor="middle"
                       fill={theme.subColor}
-                      fontSize="9.5"
-                      opacity="0.82"
+                      fontSize="9"
+                      opacity="0.8"
                       fontFamily="IBM Plex Mono, monospace"
                       pointerEvents="none"
                     >
@@ -1256,17 +1526,16 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2.5">
               <div className="flex items-center gap-2 flex-wrap min-w-0">
                 <span
-                  className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                    selectedRoom.kind === 'existing'
-                      ? 'bg-ink'
-                      : !selectedMod?.isSelected
+                  className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${selectedRoom.kind === 'existing'
+                    ? 'bg-ink'
+                    : !selectedMod?.isSelected
                       ? 'bg-control'
                       : selectedMod.selectedPhase === 'tahap-1'
-                      ? 'bg-brand'
-                      : selectedMod.selectedPhase === 'tahap-2'
-                      ? 'bg-ochre-mid'
-                      : 'bg-tealarch'
-                  }`}
+                        ? 'bg-brand'
+                        : selectedMod.selectedPhase === 'tahap-2'
+                          ? 'bg-ochre-mid'
+                          : 'bg-tealarch'
+                    }`}
                   aria-hidden="true"
                 />
                 <input
@@ -1388,11 +1657,10 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
                           key={side.id}
                           type="button"
                           onClick={() => onUpdateRoom(selectedRoom.id, { doorWall: side.id })}
-                          className={`px-2 py-0.5 rounded-[5px] text-xs font-medium transition-colors ${
-                            active
-                              ? 'bg-brand text-white'
-                              : 'text-ink-secondary hover:text-ink'
-                          }`}
+                          className={`px-2 py-0.5 rounded-[5px] text-xs font-medium transition-colors ${active
+                            ? 'bg-brand text-white'
+                            : 'text-ink-secondary hover:text-ink'
+                            }`}
                         >
                           {side.label}
                         </button>
@@ -1422,11 +1690,10 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
                   <button
                     type="button"
                     onClick={() => onToggleModule(selectedMod.id)}
-                    className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-control text-xs font-medium transition-colors ${
-                      selectedMod.isSelected
-                        ? 'bg-sheet border border-negative-border text-negative hover:bg-negative-soft'
-                        : 'bg-brand text-white hover:bg-brand-hover'
-                    }`}
+                    className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-control text-xs font-medium transition-colors ${selectedMod.isSelected
+                      ? 'bg-sheet border border-negative-border text-negative hover:bg-negative-soft'
+                      : 'bg-brand text-white hover:bg-brand-hover'
+                      }`}
                   >
                     {selectedMod.isSelected ? (
                       <>
@@ -1478,6 +1745,12 @@ export const HouseBlueprint: React.FC<HouseBlueprintProps> = ({
               KDB {formatPercent(valuation.kdbRatio)} · RAB {formatRupiah(valuation.totalDevelopmentCost, true)}
             </span>
           </div>
+        )}
+
+        {!compact && (
+          <p className="mt-2.5 pt-2 border-t border-rule text-[11px] text-ink-secondary">
+            Catatan: Bank BTN adalah bank penyalur KPR; tata letak persis tiap perumahan mengikuti site plan pengembang mitra BTN sehingga seluruh ruang pada denah dapat digeser, diubah ukurannya, atau dicerminkan.
+          </p>
         )}
       </div>
     </div>

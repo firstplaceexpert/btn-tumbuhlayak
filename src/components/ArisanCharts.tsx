@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { DailyArisanSimulationResult } from '../types';
 import { formatRupiah } from '../lib/formatters';
+import { AnimatedNumber, useInViewOnce } from './AnimatedNumber';
 
 interface ArisanChartsProps {
   sim: DailyArisanSimulationResult;
@@ -10,6 +11,8 @@ interface ArisanChartsProps {
 }
 
 export const ArisanCharts: React.FC<ArisanChartsProps> = ({ sim, regionShortLabel }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inView = useInViewOnce(containerRef, 0.12);
   const data = sim.yearlySchedule;
   if (data.length === 0) return null;
 
@@ -75,7 +78,7 @@ export const ArisanCharts: React.FC<ArisanChartsProps> = ({ sim, regionShortLabe
   const savingVsKpr = sim.kprFlpp20YrTotalPayment - sim.projectedContractPrice;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div ref={containerRef} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* CHART 1: Units/Day Acceleration vs Property Inflation */}
       <section
         aria-label="Grafik laju penyerahan rumah per hari dibanding kenaikan harga properti"
@@ -176,6 +179,8 @@ export const ArisanCharts: React.FC<ArisanChartsProps> = ({ sim, regionShortLabe
                   height={h}
                   rx="3"
                   fill={isAccelerated ? '#125EFA' : '#7AA8FD'}
+                  className={inView ? 'chart-bar-y' : 'opacity-0'}
+                  style={{ animationDelay: `${Math.min(i * 35, 420)}ms` }}
                 />
                 {i === 0 && (
                   <text
@@ -207,35 +212,43 @@ export const ArisanCharts: React.FC<ArisanChartsProps> = ({ sim, regionShortLabe
           })}
 
           {/* Overlay Line: House Price Rising with Inflation */}
-          <path d={priceLinePath} fill="none" stroke="#DC0714" strokeWidth="2.2" />
-          {data.map((d, i) => (
-            <circle
-              key={`dot-${d.year}`}
-              cx={xCenter1(i)}
-              cy={yPrice1(d.housePriceInYear)}
-              r={i === 0 || i === data.length - 1 ? 3.5 : 2.2}
-              fill="#DC0714"
-            />
-          ))}
+          <g className={inView ? 'chart-reveal-x-delayed' : 'opacity-0'}>
+            <path d={priceLinePath} fill="none" stroke="#DC0714" strokeWidth="2.2" />
+            {data.map((d, i) => (
+              <circle
+                key={`dot-${d.year}`}
+                cx={xCenter1(i)}
+                cy={yPrice1(d.housePriceInYear)}
+                r={i === 0 || i === data.length - 1 ? 3.5 : 2.2}
+                fill="#DC0714"
+              />
+            ))}
+          </g>
         </svg>
 
         <div className="pt-3 border-t border-rule grid grid-cols-3 gap-2 text-xs tabular-nums">
           <div>
             <span className="text-ink-secondary block">Tahun ke-1</span>
             <strong className="text-brand">
-              {sim.year1UnitsPerDay.toFixed(2).replace('.', ',')} unit/hari
+              <AnimatedNumber
+                value={sim.year1UnitsPerDay}
+                format={(n) => `${n.toFixed(2).replace('.', ',')} unit/hari`}
+              />
             </strong>
           </div>
           <div>
             <span className="text-ink-secondary block">Rata-rata siklus</span>
             <strong className="text-ink">
-              {sim.avgUnitsPerDay.toFixed(2).replace('.', ',')} unit/hari
+              <AnimatedNumber
+                value={sim.avgUnitsPerDay}
+                format={(n) => `${n.toFixed(2).replace('.', ',')} unit/hari`}
+              />
             </strong>
           </div>
           <div>
             <span className="text-ink-secondary block">Harga akhir Thn {data.length}</span>
             <strong className="text-btnred">
-              {formatRupiah(sim.finalYearHousePrice, true)}
+              <AnimatedNumber value={sim.finalYearHousePrice} format={(n) => formatRupiah(n, true)} />
             </strong>
           </div>
         </div>
@@ -256,7 +269,15 @@ export const ArisanCharts: React.FC<ArisanChartsProps> = ({ sim, regionShortLabe
               {sim.totalUnitsFunded.toLocaleString('id-ID')} dari{' '}
               {sim.quotaMembers.toLocaleString('id-ID')} peserta ({sim.coveragePercent.toFixed(1).replace('.', ',')}%)
             </strong>{' '}
-            menerima rumah dalam {sim.cycleYears.toFixed(1).replace('.', ',')} tahun tanpa bunga KPR.
+            menerima rumah dalam {sim.cycleYears.toFixed(1).replace('.', ',')} tahun (total setor{' '}
+            <strong className="text-ink tabular-nums">
+              {formatRupiah(sim.projectedContractPrice, true)}
+            </strong>{' '}
+            vs KPR FLPP 20 thn{' '}
+            <strong className="text-ink tabular-nums">
+              {formatRupiah(sim.kprFlpp20YrTotalPayment, true)}
+            </strong>
+            ).
           </p>
         </div>
 
@@ -297,51 +318,50 @@ export const ArisanCharts: React.FC<ArisanChartsProps> = ({ sim, regionShortLabe
           {/* Baseline */}
           <line x1={PL2} y1={PT2 + plotH2} x2={W2 - PR2} y2={PT2 + plotH2} stroke="#CBD5E6" strokeWidth="1.2" />
 
-          {/* Area Fill */}
-          <path d={cumAreaPath} fill="#125EFA" fillOpacity="0.11" />
-          {/* Curve */}
-          <path d={cumLinePath} fill="none" stroke="#125EFA" strokeWidth="2.5" />
+          {/* Area Fill & Curve */}
+          <g className={inView ? 'chart-reveal-x-delayed' : 'opacity-0'}>
+            <path d={cumAreaPath} fill="#125EFA" fillOpacity="0.11" />
+            <path d={cumLinePath} fill="none" stroke="#125EFA" strokeWidth="2.5" />
+            {data.map((d, i) =>
+              i === data.length - 1 || i === Math.floor(data.length / 2) ? (
+                <circle
+                  key={`cum-pt-${d.year}`}
+                  cx={xPos2(i)}
+                  cy={yPct2(d.cumulativePercent)}
+                  r={i === data.length - 1 ? 4.2 : 3}
+                  fill={i === data.length - 1 && sim.isBalanced ? '#0E8345' : '#125EFA'}
+                />
+              ) : null
+            )}
+          </g>
 
-          {/* End Marker & Year Ticks */}
-          {data.map((d, i) => {
-            const cx = xPos2(i);
-            const cy = yPct2(d.cumulativePercent);
-            return (
-              <g key={`cum-${d.year}`}>
-                {(i === data.length - 1 || i === Math.floor(data.length / 2)) && (
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={i === data.length - 1 ? 4.2 : 3}
-                    fill={i === data.length - 1 && sim.isBalanced ? '#0E8345' : '#125EFA'}
-                  />
-                )}
-                {(i % xLabelStride === 0 || i === data.length - 1) && (
-                  <text
-                    x={cx}
-                    y={H2 - 8}
-                    textAnchor="middle"
-                    fill="#64748B"
-                    fontSize="10"
-                    fontFamily="Plus Jakarta Sans, sans-serif"
-                  >
-                    T{d.year}
-                  </text>
-                )}
-              </g>
-            );
-          })}
+          {/* Year Ticks */}
+          {data.map((d, i) =>
+            i % xLabelStride === 0 || i === data.length - 1 ? (
+              <text
+                key={`cum-lbl-${d.year}`}
+                x={xPos2(i)}
+                y={H2 - 8}
+                textAnchor="middle"
+                fill="#64748B"
+                fontSize="10"
+                fontFamily="Plus Jakarta Sans, sans-serif"
+              >
+                T{d.year}
+              </text>
+            ) : null
+          )}
         </svg>
 
         {/* Crisp Gen-Z Comparison: Arisan Harian vs KPR FLPP 20 Tahun */}
         <div className="pt-3 border-t border-rule grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs tabular-nums">
           <div className="p-2.5 rounded-control bg-brand-soft/60 border border-brand-border">
-            <span className="text-ink-secondary block">Total setor arisan</span>
+            <span className="text-ink-secondary block">Total setor arisan murni</span>
             <strong className="text-brand text-[13px]">
               {formatRupiah(sim.projectedContractPrice, true)}
             </strong>
             <span className="text-ink-secondary block">
-              {sim.cycleYears.toFixed(1).replace('.', ',')} thn · tanpa bunga
+              {sim.cycleYears.toFixed(1).replace('.', ',')} thn · termasuk markup +{Math.round(sim.markupRate * 100)}%
             </span>
           </div>
           <div className="p-2.5 rounded-control bg-well border border-hairline">
