@@ -3,8 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { DemoUser, NfcPropertyRecord } from '../types';
 import { NFC_PROPERTY_REGISTRY } from '../data/nfcPropertyRegistry';
-import { findPropertyInRegistry } from '../lib/demoStore';
-import { nfcUidSchema } from '../lib/validation';
+import { decodeNdefRecordText, resolveNfcPayload } from '../lib/nfcPayload';
 import { formatRupiah } from '../lib/formatters';
 import {
   Wifi,
@@ -16,6 +15,7 @@ import {
   ShieldCheck,
   Search,
   Lock,
+  X,
 } from 'lucide-react';
 
 interface NfcScannerViewProps {
@@ -46,10 +46,17 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
       : 'Tempelkan kartu kunci rumah NFC BTN pada perangkat Anda, atau masukkan nomor seri yang tercetak di belakang kartu.'
   );
   const [matchedRecord, setMatchedRecord] = useState<NfcPropertyRecord | null>(activeNfcRecord);
+  const [hardwareSerial, setHardwareSerial] = useState<string>('');
   const [hasWebNfc, setHasWebNfc] = useState(false);
+  const scanAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setHasWebNfc(typeof window !== 'undefined' && 'NDEFReader' in window);
+    return () => {
+      if (scanAbortRef.current) {
+        scanAbortRef.current.abort();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -58,29 +65,63 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
     }
   }, [user.assignedNfcUid, manualUid]);
 
-  const triggerVerification = (uidInput: string) => {
-    const parsed = nfcUidSchema.safeParse(uidInput);
-    if (!parsed.success) {
+  // Reflect frozen active card if navigated directly from a frozen ?nfc=... tap
+  useEffect(() => {
+    if (!activeNfcRecord && user.assignedNfcUid) {
+      const resolved = resolveNfcPayload(user.assignedNfcUid, nfcRegistry);
+      if (resolved.record?.occupancyStatus === 'dibekukan-tunggakan') {
+        setScanPhase('frozen');
+        setMatchedRecord(resolved.record);
+        setManualUid(resolved.record.uid);
+        setScanMessage(
+          resolved.record.freezeReason ||
+            `Kartu Kunci NFC ${resolved.record.uid} DIBEKUKAN oleh Admin BTN karena tunggakan iuran arisan harian.`
+        );
+      }
+    }
+  }, [activeNfcRecord, user.assignedNfcUid, nfcRegistry]);
+
+  const stopPhysicalScan = () => {
+    if (scanAbortRef.current) {
+      scanAbortRef.current.abort();
+      scanAbortRef.current = null;
+    }
+    if (scanPhase === 'scanning') {
+      setScanPhase('idle');
+      setScanMessage(
+        'Pemindaian sensor NFC dihentikan. Klik tombol di bawah untuk memindai lagi atau masukkan nomor seri manual.'
+      );
+    }
+  };
+
+  const triggerVerification = (
+    rawInput: string,
+    opts?: { fromHardware?: boolean; chipSerial?: string }
+  ) => {
+    const resolved = resolveNfcPayload(rawInput, nfcRegistry);
+    if (!resolved.uid) {
       setScanPhase('error');
       setMatchedRecord(null);
-      setScanMessage(
-        parsed.error.issues[0]?.message || 'Format nomor seri kartu rumah tidak valid.'
-      );
+      setScanMessage('Format nomor seri atau Smart URL kartu rumah tidak valid.');
       return;
     }
 
-    const uid = parsed.data;
-    setManualUid(uid);
+    setManualUid(resolved.uid);
+    if (opts?.chipSerial) setHardwareSerial(opts.chipSerial);
     setScanPhase('scanning');
-    setScanMessage(`Membaca kartu ${uid} dan mencocokkan data sertifikat rumah BTN Anda...`);
+    setScanMessage(
+      opts?.fromHardware
+        ? `Chip NFC fisik terbaca (${resolved.uid}). Mencocokkan data sertifikat rumah BTN...`
+        : `Membaca kartu ${resolved.uid} dan mencocokkan data sertifikat rumah BTN Anda...`
+    );
 
     window.setTimeout(() => {
-      const found = findPropertyInRegistry(uid, nfcRegistry);
+      const found = resolved.record;
       if (!found) {
         setScanPhase('error');
         setMatchedRecord(null);
         setScanMessage(
-          `Nomor kartu ${uid} tidak ditemukan pada data serah terima rumah Bank BTN. Pastikan Anda menggunakan kartu kunci resmi.`
+          `Nomor kartu ${resolved.uid} tidak ditemukan pada data serah terima rumah Bank BTN. Pastikan kartu telah diprogram oleh Admin BTN.`
         );
         return;
       }
@@ -98,57 +139,114 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
       setScanPhase('matched');
       setMatchedRecord(found);
       setScanMessage(
-        `Data rumah ditemukan: ${found.clusterName} ${found.unitBlock} (${found.houseTypeLabel}). Akses perencanaan pembangunan & nilai rumah kini terbuka.`
+        `${opts?.fromHardware ? 'Chip NFC Fisik Terverifikasi! ' : ''}Data rumah ditemukan: ${found.clusterName} ${found.unitBlock} (${found.houseTypeLabel}). Akses perencanaan pembangunan & nilai rumah kini terbuka.`
       );
       onPropertyUnlocked(found);
-    }, 650);
+    }, opts?.fromHardware ? 300 : 600);
   };
 
-  // Real browser Web NFC API (Android Chrome) or clean serial-number prompt on devices without NFC hardware
+  // Real browser Web NFC API (Android Chrome: reads URL, Text, and detects blank physical tags!)
   const handleScanButtonClick = async () => {
     if (hasWebNfc) {
+      if (scanAbortRef.current) scanAbortRef.current.abort();
+      const controller = new AbortController();
+      scanAbortRef.current = controller;
+
       try {
         setScanPhase('scanning');
-        setScanMessage('Sensor NFC aktif. Dekatkan kartu kunci rumah BTN ke bagian belakang perangkat Anda...');
+        setHardwareSerial('');
+        setScanMessage(
+          'Sensor NFC aktif! Dekatkan & tahan Kartu Kunci Rumah BTN ke bagian belakang HP Android Anda...'
+        );
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ReaderCtor = (window as any).NDEFReader;
         const ndef = new ReaderCtor();
-        await ndef.scan();
+        await ndef.scan({ signal: controller.signal });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ndef.onreadingerror = () => {
+          setScanPhase('error');
+          setScanMessage(
+            'Kartu NFC terdeteksi tetapi tidak dapat dibaca. Coba geser sedikit posisi kartu di belakang HP lalu tempelkan kembali.'
+          );
+        };
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ndef.onreading = (event: any) => {
-          const decoder = new TextDecoder();
-          let readText = '';
-          for (const rec of event.message?.records || []) {
-            if (rec.recordType === 'text') {
-              readText = decoder.decode(rec.data);
-              break;
+          const chipSerial: string = event.serialNumber || '';
+          const records = event.message?.records || [];
+          let extractedPayload = '';
+
+          // Priority 1: Smart URL record (written by Admin BTN or NFC Tools URL record)
+          for (const rec of records) {
+            if (rec.recordType === 'url' || rec.recordType === 'absolute-url') {
+              const decoded = decodeNdefRecordText(rec);
+              if (decoded) {
+                extractedPayload = decoded;
+                break;
+              }
             }
           }
-          if (readText) {
-            triggerVerification(readText);
+
+          // Priority 2: Text record (plain UID or Smart URL stored as text)
+          if (!extractedPayload) {
+            for (const rec of records) {
+              if (rec.recordType === 'text') {
+                const decoded = decodeNdefRecordText(rec);
+                if (decoded) {
+                  extractedPayload = decoded;
+                  break;
+                }
+              }
+            }
+          }
+
+          // Priority 3: Any other decodable record containing BTN-NFC or nfc=
+          if (!extractedPayload) {
+            for (const rec of records) {
+              const decoded = decodeNdefRecordText(rec);
+              if (decoded && (decoded.includes('BTN-NFC-') || decoded.includes('nfc='))) {
+                extractedPayload = decoded;
+                break;
+              }
+            }
+          }
+
+          controller.abort();
+          scanAbortRef.current = null;
+
+          if (extractedPayload) {
+            triggerVerification(extractedPayload, { fromHardware: true, chipSerial });
           } else {
+            setHardwareSerial(chipSerial);
             setScanPhase('error');
+            setMatchedRecord(null);
             setScanMessage(
-              'Chip NFC terbaca tetapi data nomor kartu kosong. Silakan masukkan nomor seri secara manual.'
+              `Kartu NFC fisik terdeteksi${chipSerial ? ` (Serial Chip: ${chipSerial})` : ''}, namun chip masih kosong atau belum diprogram oleh Admin Operasional BTN. Program kartu terlebih dahulu di menu Portal Admin BTN.`
             );
           }
         };
-      } catch {
+      } catch (err: unknown) {
+        scanAbortRef.current = null;
+        if (controller.signal.aborted) return;
+        const errName = (err as { name?: string })?.name || '';
         setScanPhase('error');
         setScanMessage(
-          'Sensor NFC belum diizinkan pada perangkat ini. Silakan masukkan nomor seri yang tercetak di kartu rumah Anda.'
+          errName === 'NotAllowedError'
+            ? 'Izin NFC belum diaktifkan. Nyalakan fitur NFC di HP Android Anda dan beri izin akses NFC di Chrome.'
+            : 'Sensor NFC belum bisa diaktifkan pada perangkat ini. Anda tetap bisa menempelkan kartu langsung di layar utama HP atau mengetik nomor seri di bawah.'
         );
       }
       return;
     }
 
-    // Device without native Web NFC sensor: verify entered/assigned UID or focus manual input
+    // Device without native Web NFC sensor (Desktop / iPhone): verify entered/assigned UID or focus manual input
     if (manualUid.trim()) {
       triggerVerification(manualUid);
     } else {
       setScanPhase('idle');
       setScanMessage(
-        'Perangkat ini tidak memiliki sensor NFC bawaan. Masukkan nomor seri kartu kunci rumah BTN Anda di kolom di bawah.'
+        'Browser ini tidak mendukung Web NFC langsung (gunakan Chrome Android untuk scan sensor, atau di iPhone cukup tempel kartu Smart URL langsung dari layar utama). Anda juga bisa mengetik nomor seri di bawah.'
       );
       inputRef.current?.focus();
     }
@@ -297,24 +395,47 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={handleScanButtonClick}
-              disabled={scanPhase === 'scanning'}
-              className="inline-flex items-center gap-2 h-10 px-5 rounded-control bg-brand hover:bg-brand-hover disabled:opacity-60 text-white text-sm font-semibold transition-colors"
-            >
-              {hasWebNfc ? (
-                <>
-                  <Smartphone className="w-4 h-4" aria-hidden="true" />
-                  <span>Aktifkan Sensor NFC & Pindai</span>
-                </>
-              ) : (
-                <>
-                  <Wifi className="w-4 h-4" aria-hidden="true" />
-                  <span>Pindai Kartu Rumah Anda</span>
-                </>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={handleScanButtonClick}
+                disabled={scanPhase === 'scanning'}
+                className="inline-flex items-center gap-2 h-10 px-5 rounded-control bg-brand hover:bg-brand-hover disabled:opacity-60 text-white text-sm font-semibold transition-colors"
+              >
+                {hasWebNfc ? (
+                  <>
+                    <Smartphone className="w-4 h-4" aria-hidden="true" />
+                    <span>
+                      {scanPhase === 'scanning'
+                        ? 'Sensor NFC Aktif — Tempel Kartu...'
+                        : 'Aktifkan Sensor NFC & Pindai'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Wifi className="w-4 h-4" aria-hidden="true" />
+                    <span>Pindai Kartu Rumah Anda</span>
+                  </>
+                )}
+              </button>
+
+              {scanPhase === 'scanning' && hasWebNfc && (
+                <button
+                  type="button"
+                  onClick={stopPhysicalScan}
+                  className="inline-flex items-center gap-1 h-10 px-3.5 rounded-control border border-control bg-sheet hover:bg-well text-ink text-xs font-semibold transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Berhenti</span>
+                </button>
               )}
-            </button>
+            </div>
+
+            {hardwareSerial && (
+              <div className="text-[11px] font-mono text-ink-subtle">
+                Hardware Chip Serial: {hardwareSerial}
+              </div>
+            )}
           </div>
 
           {/* Frozen NFC Card Enforcement Notice (Anti-Default Rental Safeguard) */}
@@ -405,8 +526,11 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
                   id="nfc-uid-input"
                   type="text"
                   value={manualUid}
-                  onChange={(e) => setManualUid(e.target.value.toUpperCase())}
-                  placeholder="Contoh: BTN-NFC-3672-0014"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setManualUid(v.includes('http') || v.includes('nfc=') ? v : v.toUpperCase());
+                  }}
+                  placeholder="Contoh: BTN-NFC-3672-0014 atau Smart URL NFC"
                   className="w-full h-10 pl-9 pr-3 rounded-control border border-control bg-sheet text-sm font-mono text-ink focus:border-brand focus:outline-none"
                 />
               </div>

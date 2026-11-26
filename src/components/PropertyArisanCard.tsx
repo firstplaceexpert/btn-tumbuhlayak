@@ -123,10 +123,15 @@ export const PropertyArisanCard: React.FC<PropertyArisanCardProps> = ({
               {project.name}
             </h3>
 
-            <div className="flex items-baseline gap-1.5 pt-0.5">
-              <span className="text-xs text-ink-secondary">Mulai</span>
-              <span className="font-display text-lg font-extrabold text-brand tabular-nums">
-                {formattedPrice}
+            {/* HERO HIGHLIGHT: Daily Arisan Contribution (Most Attractive Hook!) */}
+            <div className="flex items-baseline flex-wrap gap-1 pt-0.5">
+              <span className="text-xs font-medium text-ink-secondary">Hanya</span>
+              <span className="font-display text-[21px] font-extrabold text-brand tabular-nums leading-none">
+                {formatRupiah(project.dailyContribution)}
+              </span>
+              <span className="text-xs font-bold text-brand">/hari</span>
+              <span className="text-[11px] font-mono text-ink-secondary ml-0.5">
+                · {yearsText} thn
               </span>
             </div>
           </div>
@@ -147,21 +152,21 @@ export const PropertyArisanCard: React.FC<PropertyArisanCardProps> = ({
             </span>
           </div>
 
-          {/* Compact 2-Column Arisan Metric Pill Strip */}
-          <div className="grid grid-cols-2 gap-2 p-2.5 rounded-[12px] bg-brand-soft/65 border border-brand-border/75 tabular-nums">
+          {/* Compact 2-Column Secondary Strip (Unit Price & Quota) */}
+          <div className="grid grid-cols-2 gap-2 p-2.5 rounded-[12px] bg-well border border-hairline tabular-nums">
             <div className="px-1.5">
-              <div className="text-[10.5px] text-ink-secondary">Iuran Harian</div>
-              <div className="font-display text-sm font-bold text-brand">
-                {formatRupiah(project.dailyContribution)}/hr
+              <div className="text-[10.5px] text-ink-secondary">Harga Unit</div>
+              <div className="font-display text-[13px] font-bold text-ink">
+                {formattedPrice}
               </div>
-              <div className="text-[10.5px] font-mono text-ink-secondary">{yearsText} tahun</div>
+              <div className="text-[10.5px] text-ink-secondary">Siklus {yearsText} tahun</div>
             </div>
-            <div className="px-2 border-l border-brand-border/60">
+            <div className="px-2 border-l border-rule">
               <div className="text-[10.5px] text-ink-secondary">Target Kuota</div>
-              <div className="font-display text-sm font-bold text-ink">
+              <div className="font-display text-[13px] font-bold text-ink">
                 {model.requiredQuota.toLocaleString('id-ID')} org
               </div>
-              <div className="text-[10.5px] text-positive font-semibold">1 unit / hari</div>
+              <div className="text-[10.5px] text-positive font-semibold">1 rumah / hari</div>
             </div>
           </div>
 

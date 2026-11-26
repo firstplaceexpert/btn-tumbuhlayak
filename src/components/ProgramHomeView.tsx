@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { BtnHousingProject, DemoUser } from '../types';
 import { ARISAN_LOCATION_ZONES } from '../data/arisanLocations';
-import { BTN_HOUSING_CATALOG, getProjectsByZone } from '../data/btnHousingCatalog';
+import { getProjectsByZone } from '../data/btnHousingCatalog';
 import { PropertyArisanCard } from './PropertyArisanCard';
 import { BtnLogo } from './BtnLogo';
 import {
@@ -52,25 +52,17 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
     [user?.domicileZoneId]
   );
 
-  // Public visitors can browse Featured ("pilihan") or any of the 7 zones;
+  // Public visitors filter strictly per region;
   // Logged-in customers are strictly locked to their own domicile zone.
-  const [selectedFilterZone, setSelectedFilterZone] = useState<string>('pilihan');
+  const [selectedFilterZone, setSelectedFilterZone] = useState<string>(
+    ARISAN_LOCATION_ZONES[0].id
+  );
   // Interactive toggle for the Anti-Mangkir visual showcase
   const [safetyView, setSafetyView] = useState<'lancar' | 'mangkir'>('mangkir');
 
   const visibleProjects: BtnHousingProject[] = useMemo(() => {
     if (!isPublic) {
       return getProjectsByZone(userZone.id);
-    }
-    if (selectedFilterZone === 'pilihan') {
-      const featuredIds = [
-        'grand-harmoni-park',
-        'keandra-park-tahap-2',
-        'pesona-ungaran-residence',
-      ];
-      return featuredIds
-        .map((id) => BTN_HOUSING_CATALOG.find((p) => p.id === id))
-        .filter((p): p is BtnHousingProject => Boolean(p));
     }
     return getProjectsByZone(selectedFilterZone);
   }, [isPublic, userZone.id, selectedFilterZone]);
@@ -298,17 +290,6 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
         {/* Region Filter Pills (Public only; logged-in customers stay domicile-locked) */}
         {isPublic && (
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedFilterZone('pilihan')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-                selectedFilterZone === 'pilihan'
-                  ? 'bg-brand text-white border-brand shadow-[0_4px_12px_-4px_rgba(27,86,198,0.45)]'
-                  : 'bg-well text-ink-secondary border-hairline hover:border-brand-border hover:text-ink'
-              }`}
-            >
-              Pilihan Utama
-            </button>
             {ARISAN_LOCATION_ZONES.map((z) => {
               const active = z.id === selectedFilterZone;
               return (

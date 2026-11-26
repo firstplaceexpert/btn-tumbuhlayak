@@ -14,12 +14,19 @@ import { HOUSE_TEMPLATES } from '../data/floorplanPresets';
 import { formatRupiah } from '../lib/formatters';
 import { nfcUidSchema, sanitizeString } from '../lib/validation';
 import { generateBtnNfcUid } from '../lib/demoStore';
+import {
+  buildMinimalNfcUrl,
+  buildNfcSmartUrl,
+  estimateNdefUrlBytes,
+} from '../lib/nfcPayload';
 import { BtnLogo } from './BtnLogo';
 import { AnimatedNumber } from './AnimatedNumber';
 import {
   Award,
   Building2,
+  Check,
   CheckCircle2,
+  Copy,
   Cpu,
   Dices,
   History,
@@ -36,6 +43,7 @@ import {
   AlertCircle,
   ArrowRight,
   Edit3,
+  X,
 } from 'lucide-react';
 
 interface AdminPortalViewProps {
@@ -92,14 +100,20 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   const [nilaiAwal, setNilaiAwal] = useState<number>(185000000);
   const [occupancyStatus, setOccupancyStatus] = useState<OccupancyLegalStatus>('hak-huni-aktif');
   const [programError, setProgramError] = useState<string>('');
-  const [programStatus, setProgramStatus] = useState<'idle' | 'writing' | 'success'>('idle');
+  const [programStatus, setProgramStatus] = useState<
+    'idle' | 'waiting-tap' | 'writing' | 'success'
+  >('idle');
+  const [physicalWriteConfirmed, setPhysicalWriteConfirmed] = useState<boolean>(false);
   const [programMessage, setProgramMessage] = useState<string>('');
+  const [copiedSmartUrl, setCopiedSmartUrl] = useState<boolean>(false);
   const [hasWebNfc, setHasWebNfc] = useState<boolean>(false);
+  const writeAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setHasWebNfc(typeof window !== 'undefined' && 'NDEFReader' in window);
     return () => {
       if (spinTimerRef.current) window.clearInterval(spinTimerRef.current);
+      if (writeAbortRef.current) writeAbortRef.current.abort();
     };
   }, []);
 
@@ -280,10 +294,115 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
     }
   };
 
-  const handleProgramCardSubmit = async (e: React.FormEvent) => {
+  const handleCancelPhysicalWrite = () => {
+    if (writeAbortRef.current) {
+      writeAbortRef.current.abort();
+      writeAbortRef.current = null;
+    }
+    setProgramStatus('idle');
+    setProgramMessage('');
+  };
+
+  const buildDraftRecord = (
+    finalUid: string,
+    cleanCert: string,
+    cleanCluster: string,
+    cleanBlock: string,
+    cleanCity: string
+  ): NfcPropertyRecord => {
+    const currentYear = new Date().getFullYear();
+    const ageYears = Math.max(0, Math.min(35, currentYear - tahunDibangun));
+    const todayStr = new Intl.DateTimeFormat('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date());
+
+    const matchedProj = BTN_HOUSING_CATALOG.find((p) => p.id === projectId);
+    const dailyAmt = matchedProj?.dailyContribution ?? 50000;
+    const safePrice = Math.max(50000000, nilaiAwal);
+    const totalReqDays = Math.ceil(safePrice / dailyAmt);
+
+    return {
+      uid: finalUid,
+      certificateNo: cleanCert,
+      clusterName: cleanCluster,
+      unitBlock: cleanBlock,
+      ownerName: selectedTargetUser?.name || 'Nasabah BTN',
+      lokasiKota: cleanCity || selectedTargetUser?.domicileCity || 'Indonesia',
+      templateId: selectedTemplate.id,
+      houseTypeLabel: `${selectedTemplate.shortLabel} (${selectedTemplate.programBadge})`,
+      luasTanah: selectedTemplate.luasTanah,
+      luasBangunanEksisting: selectedTemplate.luasBangunanEksisting,
+      nilaiSerahTerimaAwal: safePrice,
+      tahunDibangun,
+      usiaBangunanTahun: ageYears,
+      umurEkonomisTahun: 30,
+      porsiNilaiTanah: 0.55,
+      kondisiBangunan,
+      arisanBatchLabel: `Arisan Harian ${cleanCluster} · Pemenang Hari #${selectedTargetUser?.arisanSlotNumber || 1}`,
+      handoverDate: todayStr,
+      projectId: matchedProj?.id,
+      occupancyStatus,
+      dailyContribution: dailyAmt,
+      paidDays:
+        occupancyStatus === 'lunas-shm'
+          ? totalReqDays
+          : selectedTargetUser?.paidDays ?? Math.max(30, (selectedTargetUser?.paidMonths || 1) * 30),
+      totalRequiredDays: totalReqDays,
+      freezeReason:
+        occupancyStatus === 'dibekukan-tunggakan'
+          ? 'Kartu NFC dibekukan Admin BTN akibat tunggakan iuran harian (Hak Huni dicabut · skema sewa/rental).'
+          : undefined,
+    };
+  };
+
+  const livePreviewSmartUrl = useMemo(() => {
+    const safeUid = nfcUid.trim().toUpperCase() || 'BTN-NFC-3660-0101';
+    const draft = buildDraftRecord(
+      safeUid,
+      certificateNo || 'SHGB-BTN-0101',
+      clusterName || 'Perumahan BTN',
+      unitBlock || 'Blok C-01',
+      lokasiKota || 'Indonesia'
+    );
+    return buildNfcSmartUrl(draft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    nfcUid,
+    certificateNo,
+    clusterName,
+    unitBlock,
+    lokasiKota,
+    projectId,
+    templateId,
+    nilaiAwal,
+    tahunDibangun,
+    kondisiBangunan,
+    occupancyStatus,
+    targetUserId,
+  ]);
+
+  const liveSmartUrlBytes = useMemo(
+    () => estimateNdefUrlBytes(livePreviewSmartUrl),
+    [livePreviewSmartUrl]
+  );
+
+  const handleCopySmartUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(livePreviewSmartUrl);
+      setCopiedSmartUrl(true);
+      window.setTimeout(() => setCopiedSmartUrl(false), 2000);
+    } catch {
+      // Ignore clipboard failure
+    }
+  };
+
+  const handleProgramCardSubmit = async (e: React.FormEvent, localOnly = false) => {
     e.preventDefault();
     setProgramError('');
     setProgramMessage('');
+    setPhysicalWriteConfirmed(false);
 
     if (!selectedTargetUser) {
       setProgramError('Pilih peserta penerima unit terlebih dahulu.');
@@ -306,78 +425,80 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
       return;
     }
 
-    setProgramStatus('writing');
     const finalUid = uidParsed.data;
+    const newRecord = buildDraftRecord(finalUid, cleanCert, cleanCluster, cleanBlock, cleanCity);
+    const smartUrl = buildNfcSmartUrl(newRecord);
+    const minimalUrl = buildMinimalNfcUrl(finalUid);
 
-    // Optional physical Web NFC NDEF write on Android Chrome if supported
-    let physicalWriteNote = 'Simulasi enkripsi chip NFC berhasil ditulis ke registri lokal BTN.';
-    if (hasWebNfc) {
+    let physicalWriteNote =
+      'Data unit disimpan ke registri lokal BTN. Untuk menanam ke kartu fisik dari Laptop/iPhone, salin Smart URL di sebelah kanan lalu tulis via aplikasi NFC Tools.';
+    let wrotePhysical = false;
+
+    if (hasWebNfc && !localOnly) {
+      if (writeAbortRef.current) writeAbortRef.current.abort();
+      const controller = new AbortController();
+      writeAbortRef.current = controller;
+
+      setProgramStatus('waiting-tap');
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ReaderCtor = (window as any).NDEFReader;
         const ndef = new ReaderCtor();
-        await ndef.write({
-          records: [{ recordType: 'text', data: finalUid }],
-        });
-        physicalWriteNote = `Berhasil menulis UID ${finalUid} ke chip NFC fisik melalui Web NFC.`;
-      } catch {
-        physicalWriteNote = `Chip fisik tidak terdeteksi — UID ${finalUid} tetap diterbitkan ke registri simulasi BTN.`;
+        // Write compact cross-device Smart URL (~105 bytes — fits NTAG213/215/216 and works on Android & iPhone!)
+        try {
+          await ndef.write(
+            {
+              records: [{ recordType: 'url', data: smartUrl }],
+            },
+            { signal: controller.signal, overwrite: true }
+          );
+          wrotePhysical = true;
+          physicalWriteNote = `BERHASIL ditulis langsung ke chip NFC fisik (${estimateNdefUrlBytes(smartUrl)} byte · Smart URL lintas Android & iPhone)!`;
+        } catch (firstErr: unknown) {
+          if (controller.signal.aborted) throw firstErr;
+          // Automatic fallback to ultra-minimal URL (<56 bytes) if chip has tiny locked capacity
+          await ndef.write(
+            {
+              records: [{ recordType: 'url', data: minimalUrl }],
+            },
+            { signal: controller.signal, overwrite: true }
+          );
+          wrotePhysical = true;
+          physicalWriteNote = `BERHASIL ditulis ke chip NFC fisik (mode ringkas ${estimateNdefUrlBytes(minimalUrl)} byte · UID ${finalUid}).`;
+        }
+      } catch (err: unknown) {
+        writeAbortRef.current = null;
+        if (controller.signal.aborted) {
+          setProgramStatus('idle');
+          return;
+        }
+        const errName = (err as { name?: string })?.name || '';
+        const errMsg = (err as { message?: string })?.message || '';
+        setProgramStatus('idle');
+        setProgramError(
+          errName === 'NotAllowedError'
+            ? 'Izin NFC ditolak browser. Aktifkan NFC di pengaturan HP Android lalu izinkan akses NFC di Chrome.'
+            : `Gagal menulis ke chip NFC fisik (${errName || 'error'}${errMsg ? `: ${errMsg}` : ''}). Pastikan kartu NFC jenis NTAG213/215/216 (tidak terkunci/read-only) dan tempelkan rapat di belakang HP, atau klik "Simpan Registri Lokal Saja".`
+        );
+        return;
+      } finally {
+        writeAbortRef.current = null;
       }
+    } else {
+      setProgramStatus('writing');
     }
 
-    const currentYear = new Date().getFullYear();
-    const ageYears = Math.max(0, Math.min(35, currentYear - tahunDibangun));
-    const todayStr = new Intl.DateTimeFormat('id-ID', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date());
-
-    const matchedProj = BTN_HOUSING_CATALOG.find((p) => p.id === projectId);
-    const dailyAmt = matchedProj?.dailyContribution ?? 50000;
-    const safePrice = Math.max(50000000, nilaiAwal);
-    const totalReqDays = Math.ceil(safePrice / dailyAmt);
-
-    const newRecord: NfcPropertyRecord = {
-      uid: finalUid,
-      certificateNo: cleanCert,
-      clusterName: cleanCluster,
-      unitBlock: cleanBlock,
-      ownerName: selectedTargetUser.name,
-      lokasiKota: cleanCity || selectedTargetUser.domicileCity || 'Indonesia',
-      templateId: selectedTemplate.id,
-      houseTypeLabel: `${selectedTemplate.shortLabel} (${selectedTemplate.programBadge})`,
-      luasTanah: selectedTemplate.luasTanah,
-      luasBangunanEksisting: selectedTemplate.luasBangunanEksisting,
-      nilaiSerahTerimaAwal: safePrice,
-      tahunDibangun,
-      usiaBangunanTahun: ageYears,
-      umurEkonomisTahun: 30,
-      porsiNilaiTanah: 0.55,
-      kondisiBangunan,
-      arisanBatchLabel: `Arisan Harian ${cleanCluster} · Pemenang Hari #${selectedTargetUser.arisanSlotNumber}`,
-      handoverDate: todayStr,
-      projectId: matchedProj?.id,
-      occupancyStatus,
-      dailyContribution: dailyAmt,
-      paidDays:
-        occupancyStatus === 'lunas-shm'
-          ? totalReqDays
-          : selectedTargetUser.paidDays ?? Math.max(30, selectedTargetUser.paidMonths * 30),
-      totalRequiredDays: totalReqDays,
-      freezeReason:
-        occupancyStatus === 'dibekukan-tunggakan'
-          ? 'Kartu NFC dibekukan Admin BTN akibat tunggakan iuran harian (Hak Huni dicabut · skema sewa/rental).'
-          : undefined,
-    };
-
-    window.setTimeout(() => {
-      onProgramNfcCard(selectedTargetUser.id, newRecord);
-      setProgramStatus('success');
-      setProgramMessage(
-        `${physicalWriteNote} Akun ${selectedTargetUser.name} kini dapat langsung memindai ${finalUid} pada menu Scan Kartu.`
-      );
-    }, 450);
+    window.setTimeout(
+      () => {
+        onProgramNfcCard(selectedTargetUser.id, newRecord);
+        setPhysicalWriteConfirmed(wrotePhysical);
+        setProgramStatus('success');
+        setProgramMessage(
+          `${physicalWriteNote} Akun ${selectedTargetUser.name} kini aktif untuk UID ${finalUid}.`
+        );
+      },
+      wrotePhysical ? 150 : 350
+    );
   };
 
   return (
@@ -1019,9 +1140,38 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
               </select>
             </div>
 
+            {programStatus === 'waiting-tap' && (
+              <div className="p-4 rounded-[14px] bg-brand-soft border-2 border-brand flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="relative w-11 h-11 flex items-center justify-center flex-shrink-0">
+                    <span className="absolute inset-0 rounded-full border-2 border-brand animate-nfc-ripple" />
+                    <span className="w-9 h-9 rounded-full bg-brand text-white flex items-center justify-center relative z-10">
+                      <Wifi className="w-4 h-4" aria-hidden="true" />
+                    </span>
+                  </div>
+                  <div className="text-xs space-y-0.5">
+                    <div className="font-display font-bold text-brand text-sm">
+                      Tempelkan kartu NFC fisik ke belakang HP sekarang...
+                    </div>
+                    <div className="text-ink-secondary">
+                      Tahan 1–2 detik hingga browser selesai menulis Smart URL ({liveSmartUrlBytes} byte) ke chip.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancelPhysicalWrite}
+                  className="h-8 px-3 rounded-control border border-control bg-sheet hover:bg-well text-ink text-xs font-semibold inline-flex items-center gap-1 whitespace-nowrap self-start sm:self-auto"
+                >
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Batalkan</span>
+                </button>
+              </div>
+            )}
+
             {programError && (
-              <div className="p-3 rounded-control bg-btnred-soft border border-btnred-border text-xs text-btnred flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+              <div className="p-3 rounded-control bg-btnred-soft border border-btnred-border text-xs text-btnred flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <span>{programError}</span>
               </div>
             )}
@@ -1030,35 +1180,75 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
               <div className="p-4 rounded-control bg-positive-soft border border-positive-border text-xs text-positive space-y-1">
                 <div className="font-semibold flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                  <span>Kartu Kunci Pintar NFC Berhasil Diprogram & Diaktifkan</span>
+                  <span>
+                    {physicalWriteConfirmed
+                      ? 'Chip NFC Fisik Berhasil Diprogram (Aktif Lintas Android & iPhone!)'
+                      : 'Kartu Kunci Pintar NFC Berhasil Diprogram & Diaktifkan'}
+                  </span>
                 </div>
                 <p className="text-ink-secondary leading-relaxed">{programMessage}</p>
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={programStatus === 'writing'}
-              className="w-full h-11 rounded-control bg-brand hover:bg-brand-hover disabled:opacity-60 text-white font-display font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors"
-            >
-              {hasWebNfc ? (
-                <Smartphone className="w-4 h-4" aria-hidden="true" />
-              ) : (
-                <Wifi className="w-4 h-4" aria-hidden="true" />
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <button
+                type="submit"
+                disabled={programStatus === 'writing' || programStatus === 'waiting-tap'}
+                className="flex-1 h-11 px-4 rounded-control bg-brand hover:bg-brand-hover disabled:opacity-60 text-white font-display font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors"
+              >
+                {hasWebNfc ? (
+                  <Smartphone className="w-4 h-4" aria-hidden="true" />
+                ) : (
+                  <Wifi className="w-4 h-4" aria-hidden="true" />
+                )}
+                <span>
+                  {programStatus === 'waiting-tap'
+                    ? 'Menunggu kartu NFC ditempel...'
+                    : programStatus === 'writing'
+                    ? 'Menyimpan data kartu...'
+                    : hasWebNfc
+                    ? 'Tulis ke Chip NFC Fisik & Aktifkan'
+                    : 'Program & Terbitkan Kartu Kunci NFC BTN'}
+                </span>
+                <ArrowRight className="w-4 h-4" aria-hidden="true" />
+              </button>
+
+              {hasWebNfc && (
+                <button
+                  type="button"
+                  disabled={programStatus === 'writing' || programStatus === 'waiting-tap'}
+                  onClick={(ev) => handleProgramCardSubmit(ev, true)}
+                  className="h-11 px-4 rounded-control border border-control bg-sheet hover:bg-well text-ink text-xs font-semibold transition-colors whitespace-nowrap"
+                >
+                  Simpan Lokal Saja
+                </button>
               )}
-              <span>
-                {programStatus === 'writing'
-                  ? 'Menulis data rumah ke chip NFC...'
-                  : hasWebNfc
-                  ? 'Tulis ke Chip NFC Fisik & Aktifkan Unit'
-                  : 'Program & Terbitkan Kartu Kunci NFC BTN'}
-              </span>
-              <ArrowRight className="w-4 h-4" aria-hidden="true" />
-            </button>
+            </div>
           </form>
 
-          {/* Right (5 cols): Live Smart Key Card Visual Preview */}
+          {/* Right (5 cols): Live Smart Key Card Visual Preview & Physical NFC Tools Export */}
           <aside className="lg:col-span-5 space-y-4">
+            {/* Live Hardware Status Pill */}
+            <div
+              className={`p-3.5 rounded-card border text-xs flex items-center justify-between gap-2 ${
+                hasWebNfc
+                  ? 'bg-positive-soft/70 border-positive-border text-positive'
+                  : 'bg-brand-soft/60 border-brand-border text-brand'
+              }`}
+            >
+              <span className="inline-flex items-center gap-2 font-semibold">
+                <Smartphone className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                <span>
+                  {hasWebNfc
+                    ? 'Sensor Web NFC Android Aktif · Siap Tulis Chip Fisik'
+                    : 'Mode Browser Non-NFC · Gunakan Chrome Android / NFC Tools'}
+                </span>
+              </span>
+              <span className="font-mono text-[11px] font-bold whitespace-nowrap">
+                ~{liveSmartUrlBytes} B
+              </span>
+            </div>
+
             <div className="rounded-[18px] btn-hero-surface text-white p-6 space-y-5 relative overflow-hidden">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-blue-100 uppercase tracking-wider">
@@ -1073,8 +1263,20 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
               <div className="rounded-[16px] bg-sheet text-ink p-5 shadow-[0_14px_30px_-10px_rgba(0,0,0,0.35)] space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <BtnLogo size="sm" />
-                  <span className="px-2 py-0.5 rounded-full bg-brand-soft text-brand text-[10px] font-bold uppercase tracking-wider">
-                    NFC Smart Key
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      occupancyStatus === 'dibekukan-tunggakan'
+                        ? 'bg-btnred-soft text-btnred'
+                        : occupancyStatus === 'lunas-shm'
+                        ? 'bg-positive-soft text-positive'
+                        : 'bg-brand-soft text-brand'
+                    }`}
+                  >
+                    {occupancyStatus === 'dibekukan-tunggakan'
+                      ? 'Dibekukan'
+                      : occupancyStatus === 'lunas-shm'
+                      ? 'Lunas SHM'
+                      : 'NFC Smart Key'}
                   </span>
                 </div>
 
@@ -1099,7 +1301,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
                     </div>
                   </div>
                   <div>
-                    <div className="text-[11px] text-ink-subtle">Klaster & Blok</div>
+                    <div className="text-[11px] text-ink-subtle">Klaster &amp; Blok</div>
                     <div className="font-medium text-ink truncate">
                       {clusterName || '-'} · {unitBlock || '-'}
                     </div>
@@ -1114,19 +1316,46 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
               </div>
 
               <div className="text-xs text-blue-100 leading-relaxed space-y-1">
-                <div className="font-semibold text-white">Payload data tertanam:</div>
+                <div className="font-semibold text-white">Payload data tertanam ke chip fisik:</div>
                 <div>
-                  • Luas Tanah {selectedTemplate.luasTanah} m² · Bangunan Eksisting{' '}
-                  {selectedTemplate.luasBangunanEksisting} m²
+                  • Luas Tanah {selectedTemplate.luasTanah} m² · Bangunan{' '}
+                  {selectedTemplate.luasBangunanEksisting} m² · {formatRupiah(nilaiAwal, true)}
                 </div>
-                <div>• Nilai Serah Terima: {formatRupiah(nilaiAwal)}</div>
-                <div>• Lokasi: {lokasiKota || '-'}</div>
+                <div>• Ukuran payload: ~{liveSmartUrlBytes} byte (muat di NTAG213 / 215 / 216)</div>
+                <div>• Lintas HP: Tap di Android Chrome maupun iPhone langsung terbuka</div>
               </div>
             </div>
 
-            <div className="p-4 rounded-card border border-hairline bg-well text-xs text-ink-secondary leading-relaxed">
-              <strong className="text-ink">Cara uji end-to-end:</strong> Setelah klik{' '}
-              <em>Program &amp; Terbitkan Kartu Kunci NFC BTN</em>, keluar dari akun Admin lalu masuk menggunakan akun nasabah yang baru diprogram. Kartu NFC tersebut otomatis aktif dan langsung bisa dipindai di menu <strong>Scan Kartu</strong>.
+            {/* 1-Click Copy Smart URL for NFC Tools App (iPhone / Android / Laptop Backup!) */}
+            <div className="p-4 rounded-card border border-hairline bg-well space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-ink">
+                  Smart URL Kartu NFC (untuk aplikasi NFC Tools)
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopySmartUrl}
+                  className="inline-flex items-center gap-1 h-7 px-2.5 rounded-control bg-sheet border border-control hover:border-brand text-xs font-semibold text-brand transition-colors"
+                >
+                  {copiedSmartUrl ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-positive" aria-hidden="true" />
+                      <span className="text-positive">Tersalin!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Salin URL</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <div className="p-2.5 rounded-control bg-sheet border border-hairline font-mono text-[11px] text-ink-secondary break-all leading-relaxed select-all">
+                {livePreviewSmartUrl}
+              </div>
+              <p className="text-[11.5px] text-ink-secondary leading-relaxed">
+                <strong>Tips Demo Langsung:</strong> Di HP Android Chrome, cukup klik tombol biru di kiri lalu tempel kartu fisik. Jika memakai iPhone, salin URL di atas → buka aplikasi <strong>NFC Tools</strong> → <em>Write → Add a record → URL/URI</em> → tempel kartu. Setelah itu kartu fisik bisa langsung di-tap dari iPhone maupun Android!
+              </p>
             </div>
           </aside>
         </div>
