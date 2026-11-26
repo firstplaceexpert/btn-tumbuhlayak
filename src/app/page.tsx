@@ -28,7 +28,6 @@ import {
   resetDemoStoreState,
   saveDemoStoreState,
 } from '../lib/demoStore';
-import { resolveNfcPayload } from '../lib/nfcPayload';
 import {
   DemoUser,
   ExpansionModule,
@@ -47,108 +46,8 @@ export default function Home() {
   const [storeHydrated, setStoreHydrated] = useState(false);
 
   useEffect(() => {
-    const loaded = loadDemoStoreState();
-    setDemoStore(loaded);
+    setDemoStore(loadDemoStoreState());
     setStoreHydrated(true);
-
-    // Cross-device Physical NFC Auto-Unlock: detects Smart URL taps from Android & iPhone (/?nfc=...)
-    if (typeof window !== 'undefined' && window.location.search.includes('nfc=')) {
-      const resolved = resolveNfcPayload(window.location.href, loaded.nfcRegistry);
-      if (resolved.record) {
-        const rec = resolved.record;
-
-        // Upsert cross-device chip record into local registry so all views stay synced
-        setDemoStore((prev) => {
-          const exists = prev.nfcRegistry.some(
-            (r) => r.uid.toUpperCase() === rec.uid.toUpperCase()
-          );
-          const nextRegistry = exists
-            ? prev.nfcRegistry.map((r) =>
-                r.uid.toUpperCase() === rec.uid.toUpperCase() ? rec : r
-              )
-            : [rec, ...prev.nfcRegistry];
-          return { ...prev, nfcRegistry: nextRegistry };
-        });
-
-        // Match or synthesize owner session so tapping physical NFC card works instantly on ANY judge's phone!
-        const matchedOwner =
-          loaded.users.find(
-            (u) =>
-              u.role !== 'admin' &&
-              (u.assignedNfcUid?.toUpperCase() === rec.uid.toUpperCase() ||
-                u.name.toLowerCase() === rec.ownerName.toLowerCase())
-          ) || {
-            id: `nfc-owner-${rec.uid.toLowerCase()}`,
-            role: 'customer' as const,
-            email: `${rec.ownerName.toLowerCase().replace(/[^a-z0-9]+/g, '.')}@pemilik-btn.id`,
-            name: rec.ownerName,
-            roleLabel:
-              rec.occupancyStatus === 'dibekukan-tunggakan'
-                ? 'Kartu NFC Dibekukan · Tunggakan Iuran'
-                : 'Pemilik Kartu Kunci NFC BTN',
-            domicileCity: rec.lokasiKota,
-            domicileZoneId: 'jabodetabek',
-            selectedProjectId: rec.projectId,
-            lotteryStatus: 'kartu-aktif' as const,
-            arisanGroupName: rec.clusterName,
-            arisanSlotNumber: 1,
-            paidMonths: Math.max(1, Math.round((rec.paidDays || 365) / 30)),
-            paidDays: rec.paidDays || 365,
-            totalCycleMonths: Math.round((rec.totalRequiredDays || 3400) / 30),
-            monthlyContribution: (rec.dailyContribution || 50000) * 30,
-            hasReceivedUnit: true,
-            assignedNfcUid: rec.uid,
-          };
-
-        setCurrentUser({
-          ...matchedOwner,
-          hasReceivedUnit: true,
-          assignedNfcUid: rec.uid,
-        });
-
-        if (rec.occupancyStatus === 'dibekukan-tunggakan') {
-          setActiveNfcRecord(null);
-          setActiveTab('nfc');
-          setSplash({
-            key: Date.now(),
-            variant: 'transition',
-            subtitle: `Kartu NFC ${rec.uid} terdeteksi · memeriksa status hak huni...`,
-          });
-        } else {
-          // Immediately hydrate & unlock Layer 2 Planner from physical NFC chip!
-          const tpl =
-            HOUSE_TEMPLATES.find((t) => t.id === rec.templateId) || DEFAULT_TEMPLATE;
-          setActiveNfcRecord(rec);
-          setTemplateId(tpl.id);
-          setLotLength(tpl.lotLength);
-          setLotWidth(tpl.lotWidth);
-          setRooms(tpl.rooms.map((r) => ({ ...r })));
-          setFloorView('lt1');
-          setProfile({
-            namaPemilik: rec.ownerName,
-            lokasiKota: rec.lokasiKota,
-            luasTanah: rec.luasTanah,
-            luasBangunanEksisting: rec.luasBangunanEksisting,
-            nilaiAwalProperti: rec.nilaiSerahTerimaAwal,
-            contingencyRate: 0.08,
-            tahunDibangun: rec.tahunDibangun,
-            usiaBangunanTahun: rec.usiaBangunanTahun,
-            umurEkonomisTahun: rec.umurEkonomisTahun,
-            porsiNilaiTanah: rec.porsiNilaiTanah,
-            kondisiBangunan: rec.kondisiBangunan,
-          });
-          setActiveTab('planner');
-          setSplash({
-            key: Date.now(),
-            variant: 'transition',
-            subtitle: `Kartu NFC Fisik Terverifikasi · ${rec.clusterName} (${rec.unitBlock})`,
-          });
-        }
-
-        // Clean URL query after reading chip payload
-        window.history.replaceState({}, '', window.location.pathname);
-      }
-    }
   }, []);
 
   useEffect(() => {

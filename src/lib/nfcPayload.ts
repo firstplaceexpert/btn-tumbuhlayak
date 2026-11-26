@@ -1,20 +1,23 @@
 /**
- * TumbuhLayak - Cross-Device Physical NFC Payload Codec (NTAG213 / NTAG215 / NTAG216)
+ * TumbuhLayak - Private Non-URL Physical NFC Chip Codec (e-Money Style Security)
  *
- * Encodes a programmed BTN house record into a super-compact HTTPS Smart URL (<125 bytes)
- * so it fits even on small 144-byte NTAG213 tags AND works across:
- *   1. Android Chrome Web NFC (NDEFReader.write + NDEFReader.scan)
- *   2. iPhone / iOS Native Background NFC Tag Reading (opens Smart URL directly!)
- *   3. Manual programming via free "NFC Tools" app (Write -> URL or Text record)
+ * Security Architecture (2-Factor Authentication):
+ *   - NEVER stores a public auto-login URL on the NFC card!
+ *   - Writes a compact private NDEF Text Record token (~70 bytes, fits NTAG213/215/216):
+ *       BTNL1|<UID>|<projectIndex>|<templateIndex>|<unitBlock>|<ownerName>|<priceJt>|<year>|<statusCode>
+ *   - If a physical card is lost or stolen, tapping it on a stranger's phone will NOT
+ *     open the website or bypass login. The holder must log in to the owner's BTN account
+ *     first, navigate to "Scan Kartu", and scan the card inside the authenticated web session
+ *     where the system also verifies Account Owner <-> Card Owner match.
  */
 
-import { NfcPropertyRecord, OccupancyLegalStatus } from '../types';
+import { DemoUser, NfcPropertyRecord, OccupancyLegalStatus } from '../types';
 import { BTN_HOUSING_CATALOG } from '../data/btnHousingCatalog';
 import { HOUSE_TEMPLATES } from '../data/floorplanPresets';
 import { findPropertyInRegistry } from './demoStore';
 import { nfcUidSchema, sanitizeString } from './validation';
 
-const PRODUCTION_ORIGIN = 'https://tumbuhlayak.vercel.app';
+const TOKEN_PREFIX = 'BTNL1';
 
 const STATUS_TO_CODE: Record<OccupancyLegalStatus, string> = {
   'hak-huni-aktif': 'a',
@@ -28,74 +31,89 @@ const CODE_TO_STATUS: Record<string, OccupancyLegalStatus> = {
   f: 'dibekukan-tunggakan',
 };
 
-export function getPublicAppOrigin(): string {
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    // Prefer production origin when programming on localhost so physical cards work on any phone!
-    if (
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1'
-    ) {
-      return PRODUCTION_ORIGIN;
-    }
-    return window.location.origin;
-  }
-  return PRODUCTION_ORIGIN;
+function cleanTokenField(value: string, maxLen: number): string {
+  return sanitizeString(value, maxLen).replace(/\|/g, ' ').trim();
 }
 
 /**
- * Builds an ultra-compact Smart URL for a physical NFC card.
- * Example (~105 bytes, fits NTAG213 144-byte limit comfortably!):
- *   https://tumbuhlayak.vercel.app/?nfc=BTN-NFC-3660-0101&p=keandra-park-tahap-2&b=Blok+C-01&o=Siti+Rahma&t=1&v=168&s=a
+ * Encodes a BTN house record into a private non-URL NDEF Text token (~70-85 bytes).
+ * Fits comfortably inside NTAG213 (144 B), NTAG215 (504 B), and NTAG216 (888 B).
  */
-export function buildNfcSmartUrl(record: NfcPropertyRecord, originOverride?: string): string {
-  const origin = originOverride || getPublicAppOrigin();
-  const params = new URLSearchParams();
-  params.set('nfc', record.uid.toUpperCase());
-
-  // Use short project index if found in catalog (saves ~18 bytes vs slug on NTAG213!)
+export function buildNfcChipToken(record: NfcPropertyRecord): string {
+  const uid = record.uid.trim().toUpperCase();
   const projIdx = record.projectId
     ? BTN_HOUSING_CATALOG.findIndex((p) => p.id === record.projectId)
     : -1;
-  if (projIdx >= 0) {
-    params.set('pi', String(projIdx));
-  } else {
-    params.set('cl', sanitizeString(record.clusterName, 24));
+  const projRef = projIdx >= 0 ? String(projIdx) : cleanTokenField(record.clusterName, 22);
+
+  const tplIdx = Math.max(
+    0,
+    HOUSE_TEMPLATES.findIndex((t) => t.id === record.templateId)
+  );
+  const block = cleanTokenField(record.unitBlock, 14);
+  const owner = cleanTokenField(record.ownerName, 24);
+  const priceJt = String(Math.round(record.nilaiSerahTerimaAwal / 1_000_000));
+  const year = String(record.tahunDibangun || 2025);
+  const statusCode = STATUS_TO_CODE[record.occupancyStatus || 'hak-huni-aktif'] || 'a';
+
+  return [TOKEN_PREFIX, uid, projRef, String(tplIdx), block, owner, priceJt, year, statusCode].join(
+    '|'
+  );
+}
+
+/**
+ * Estimates NDEF Text Record byte footprint (header + lang 'en' + UTF-8 text payload)
+ */
+export function estimateNdefTextBytes(text: string): number {
+  return 10 + new TextEncoder().encode(text).length;
+}
+
+/**
+ * Verifies whether a scanned NFC card legally belongs to the currently authenticated BTN account.
+ * Prevents stolen-card access even if someone logs in with another account!
+ */
+export function verifyCardBelongsToUser(
+  record: NfcPropertyRecord,
+  user: DemoUser
+): { allowed: boolean; reason?: string } {
+  if (user.role === 'admin') {
+    return { allowed: true };
   }
 
-  const tplIdx = HOUSE_TEMPLATES.findIndex((t) => t.id === record.templateId);
-  if (tplIdx >= 0) {
-    params.set('t', String(tplIdx));
+  // Exact UID assigned to this user account
+  if (user.assignedNfcUid && user.assignedNfcUid.toUpperCase() === record.uid.toUpperCase()) {
+    return { allowed: true };
   }
 
-  params.set('b', sanitizeString(record.unitBlock, 14));
-  params.set('o', sanitizeString(record.ownerName, 22));
-  params.set('v', String(Math.round(record.nilaiSerahTerimaAwal / 1_000_000)));
-  params.set('y', String(record.tahunDibangun || 2025));
-  params.set('s', STATUS_TO_CODE[record.occupancyStatus || 'hak-huni-aktif'] || 'a');
+  // Normalized name match (handles honorifics like "Keluarga Budi Santoso", "Ibu Siti Rahmawati", "Bpk. Hendra Wijaya")
+  const normalize = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/\b(keluarga|ibu|bpk|bapak|sdr|sdri|ny|tn)\b\.?/g, ' ')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
-  return `${origin}/?${params.toString()}`;
+  const userNorm = normalize(user.name);
+  const ownerNorm = normalize(record.ownerName);
+
+  if (
+    userNorm &&
+    ownerNorm &&
+    (ownerNorm.includes(userNorm) || userNorm.includes(ownerNorm))
+  ) {
+    return { allowed: true };
+  }
+
+  return {
+    allowed: false,
+    reason: `Kartu Kunci NFC ${record.uid} terdaftar atas nama ${record.ownerName} — tidak sesuai dengan akun yang sedang masuk (${user.name}). Demi keamanan nasabah BTN, akses ditolak.`,
+  };
 }
 
 /**
- * Ultra-minimal fallback URL (<56 bytes) if a card has tiny memory (e.g. NTAG213 locked sectors)
- */
-export function buildMinimalNfcUrl(uid: string, originOverride?: string): string {
-  const origin = originOverride || getPublicAppOrigin();
-  return `${origin}/?nfc=${encodeURIComponent(uid.trim().toUpperCase())}`;
-}
-
-/**
- * Estimates NDEF URI record byte footprint (HTTPS prefix compresses 'https://' -> 1 byte per NFC Forum RTD)
- */
-export function estimateNdefUrlBytes(url: string): number {
-  const withoutScheme = url.replace(/^https:\/\//i, '');
-  // NDEF TLV + URI record header (~7 bytes) + 1 prefix byte + payload bytes
-  return 8 + new TextEncoder().encode(withoutScheme).length;
-}
-
-/**
- * Decodes ANY physical NFC scan input (Smart URL, query string, or plain UID text)
- * into a full NfcPropertyRecord — even on a brand-new phone that has never seen this UID!
+ * Decodes a physical NFC Text record (private BTNL1|... token or plain BTN-NFC-XXXX-XXXX UID)
+ * into a full NfcPropertyRecord — works cross-device without exposing any public auto-login URL!
  */
 export function resolveNfcPayload(
   rawInput: string,
@@ -106,73 +124,49 @@ export function resolveNfcPayload(
     return { uid: '', record: null, fromChipPayload: false };
   }
 
-  // Case 1: Full URL or query string containing ?nfc=... or nfc=...
-  let searchParams: URLSearchParams | null = null;
-  if (/^https?:\/\//i.test(trimmed)) {
-    try {
-      const parsedUrl = new URL(trimmed);
-      searchParams = parsedUrl.searchParams;
-    } catch {
-      // Fallback below
-    }
-  } else if (trimmed.includes('nfc=')) {
-    const queryPart = trimmed.includes('?') ? trimmed.slice(trimmed.indexOf('?') + 1) : trimmed;
-    searchParams = new URLSearchParams(queryPart);
-  }
+  // Case 1: Private BTN Chip Token ("BTNL1|BTN-NFC-3660-0101|0|1|Blok C-01|Siti Rahmawati|168|2025|a")
+  if (trimmed.startsWith(`${TOKEN_PREFIX}|`)) {
+    const parts = trimmed.split('|');
+    if (parts.length >= 9) {
+      const uidCheck = nfcUidSchema.safeParse(parts[1]);
+      if (!uidCheck.success) {
+        return { uid: parts[1] || '', record: null, fromChipPayload: false };
+      }
 
-  if (searchParams && searchParams.get('nfc')) {
-    const rawUid = (searchParams.get('nfc') || '').trim().toUpperCase();
-    const uidCheck = nfcUidSchema.safeParse(rawUid);
-    if (!uidCheck.success) {
-      return { uid: rawUid, record: null, fromChipPayload: false };
-    }
-    const uid = uidCheck.data;
+      const uid = uidCheck.data;
+      const localMatch = findPropertyInRegistry(uid, localRegistry);
 
-    // Check if local registry already has this UID (e.g. same phone or updated Admin status)
-    const localMatch = findPropertyInRegistry(uid, localRegistry);
-
-    // Check if URL carries embedded cross-device unit metadata (pi / cl / o / b / t / v / s)
-    const hasEmbeddedMeta = Boolean(
-      searchParams.get('o') || searchParams.get('pi') || searchParams.get('cl') || searchParams.get('s')
-    );
-
-    if (localMatch && !hasEmbeddedMeta) {
-      return { uid, record: localMatch, fromChipPayload: false };
-    }
-
-    if (hasEmbeddedMeta) {
-      const piRaw = searchParams.get('pi');
+      const projRef = parts[2];
       const proj =
-        piRaw !== null && !Number.isNaN(Number(piRaw))
-          ? BTN_HOUSING_CATALOG[Number(piRaw)]
+        /^\d+$/.test(projRef) && BTN_HOUSING_CATALOG[Number(projRef)]
+          ? BTN_HOUSING_CATALOG[Number(projRef)]
           : undefined;
 
-      const tRaw = searchParams.get('t');
+      const tplIdx = Number(parts[3]);
       const tpl =
-        (tRaw !== null && !Number.isNaN(Number(tRaw)) ? HOUSE_TEMPLATES[Number(tRaw)] : undefined) ||
+        (!Number.isNaN(tplIdx) ? HOUSE_TEMPLATES[tplIdx] : undefined) ||
         (proj ? HOUSE_TEMPLATES.find((h) => h.id === proj.templateId) : undefined) ||
         HOUSE_TEMPLATES[1];
 
-      const statusCode = (searchParams.get('s') || 'a').toLowerCase();
-      const chipStatus: OccupancyLegalStatus = CODE_TO_STATUS[statusCode] || 'hak-huni-aktif';
-
-      // If local Admin froze/updated this exact UID on the SAME device, prefer local status if modified;
-      // otherwise trust the chip's embedded status (works seamlessly across different phones!)
-      const effectiveStatus = localMatch ? localMatch.occupancyStatus || chipStatus : chipStatus;
-
-      const ownerName = sanitizeString(searchParams.get('o') || localMatch?.ownerName || 'Nasabah BTN', 60);
-      const unitBlock = sanitizeString(searchParams.get('b') || localMatch?.unitBlock || 'Blok A-01', 30);
-      const clusterName = sanitizeString(
-        proj?.name || searchParams.get('cl') || localMatch?.clusterName || 'Perumahan Mitra BTN',
-        70
-      );
-      const lokasiKota = proj?.city || localMatch?.lokasiKota || 'Indonesia';
-      const priceMillions = Number(searchParams.get('v'));
+      const unitBlock = sanitizeString(parts[4] || localMatch?.unitBlock || 'Blok A-01', 30);
+      const ownerName = sanitizeString(parts[5] || localMatch?.ownerName || 'Nasabah BTN', 60);
+      const priceMillions = Number(parts[6]);
       const nilaiAwal =
         !Number.isNaN(priceMillions) && priceMillions >= 50
           ? priceMillions * 1_000_000
           : proj?.price || localMatch?.nilaiSerahTerimaAwal || tpl.nilaiAwalProperti;
-      const tahunDibangun = Number(searchParams.get('y')) || localMatch?.tahunDibangun || 2025;
+      const tahunDibangun = Number(parts[7]) || localMatch?.tahunDibangun || 2025;
+      const chipStatus: OccupancyLegalStatus =
+        CODE_TO_STATUS[(parts[8] || 'a').toLowerCase()] || 'hak-huni-aktif';
+
+      // Prefer local Admin status if Admin updated this exact UID on the same browser;
+      // otherwise use the chip's embedded status (works cross-device!)
+      const effectiveStatus = localMatch ? localMatch.occupancyStatus || chipStatus : chipStatus;
+      const clusterName = sanitizeString(
+        proj?.name || (!/^\d+$/.test(projRef) ? projRef : '') || localMatch?.clusterName || 'Perumahan Mitra BTN',
+        70
+      );
+      const lokasiKota = proj?.city || localMatch?.lokasiKota || 'Indonesia';
       const currentYear = new Date().getFullYear();
       const usiaBangunanTahun = Math.max(0, Math.min(35, currentYear - tahunDibangun));
       const dailyContribution = proj?.dailyContribution || localMatch?.dailyContribution || 50_000;
@@ -215,11 +209,9 @@ export function resolveNfcPayload(
 
       return { uid, record: reconstructed, fromChipPayload: true };
     }
-
-    return { uid, record: localMatch || null, fromChipPayload: false };
   }
 
-  // Case 2: Plain UID text (e.g. "BTN-NFC-3672-0014" written via NFC Tools Text Record)
+  // Case 2: Plain UID Text (e.g. "BTN-NFC-3672-0014")
   const uidMatch = trimmed.toUpperCase().match(/BTN-NFC-[A-Z0-9]{4}-[0-9]{4}/);
   const candidateUid = uidMatch ? uidMatch[0] : trimmed.toUpperCase();
   const parsed = nfcUidSchema.safeParse(candidateUid);
@@ -232,7 +224,7 @@ export function resolveNfcPayload(
 }
 
 /**
- * Decodes an NDEFRecord from Web NFC API (supports 'url', 'absolute-url', 'text', and unknown bytes)
+ * Decodes an NDEFRecord from Web NFC API (supports 'text' and fallback string records)
  */
 export function decodeNdefRecordText(record: {
   recordType?: string;

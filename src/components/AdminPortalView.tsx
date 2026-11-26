@@ -14,13 +14,10 @@ import { HOUSE_TEMPLATES } from '../data/floorplanPresets';
 import { formatRupiah } from '../lib/formatters';
 import { nfcUidSchema, sanitizeString } from '../lib/validation';
 import { generateBtnNfcUid } from '../lib/demoStore';
-import {
-  buildMinimalNfcUrl,
-  buildNfcSmartUrl,
-  estimateNdefUrlBytes,
-} from '../lib/nfcPayload';
+import { buildNfcChipToken, estimateNdefTextBytes } from '../lib/nfcPayload';
 import { BtnLogo } from './BtnLogo';
 import { AnimatedNumber } from './AnimatedNumber';
+import { NfcModalPhase, NfcTapModal } from './NfcTapModal';
 import {
   Award,
   Building2,
@@ -105,8 +102,12 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   >('idle');
   const [physicalWriteConfirmed, setPhysicalWriteConfirmed] = useState<boolean>(false);
   const [programMessage, setProgramMessage] = useState<string>('');
-  const [copiedSmartUrl, setCopiedSmartUrl] = useState<boolean>(false);
+  const [copiedToken, setCopiedToken] = useState<boolean>(false);
   const [hasWebNfc, setHasWebNfc] = useState<boolean>(false);
+  const [nfcModalOpen, setNfcModalOpen] = useState<boolean>(false);
+  const [nfcModalPhase, setNfcModalPhase] = useState<NfcModalPhase>('waiting');
+  const [nfcModalTitle, setNfcModalTitle] = useState<string>('');
+  const [nfcModalMessage, setNfcModalMessage] = useState<string>('');
   const writeAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -299,6 +300,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
       writeAbortRef.current.abort();
       writeAbortRef.current = null;
     }
+    setNfcModalOpen(false);
     setProgramStatus('idle');
     setProgramMessage('');
   };
@@ -357,7 +359,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
     };
   };
 
-  const livePreviewSmartUrl = useMemo(() => {
+  const liveChipToken = useMemo(() => {
     const safeUid = nfcUid.trim().toUpperCase() || 'BTN-NFC-3660-0101';
     const draft = buildDraftRecord(
       safeUid,
@@ -366,7 +368,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
       unitBlock || 'Blok C-01',
       lokasiKota || 'Indonesia'
     );
-    return buildNfcSmartUrl(draft);
+    return buildNfcChipToken(draft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     nfcUid,
@@ -383,23 +385,23 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
     targetUserId,
   ]);
 
-  const liveSmartUrlBytes = useMemo(
-    () => estimateNdefUrlBytes(livePreviewSmartUrl),
-    [livePreviewSmartUrl]
+  const liveChipBytes = useMemo(
+    () => estimateNdefTextBytes(liveChipToken),
+    [liveChipToken]
   );
 
-  const handleCopySmartUrl = async () => {
+  const handleCopyChipToken = async () => {
     try {
-      await navigator.clipboard.writeText(livePreviewSmartUrl);
-      setCopiedSmartUrl(true);
-      window.setTimeout(() => setCopiedSmartUrl(false), 2000);
+      await navigator.clipboard.writeText(liveChipToken);
+      setCopiedToken(true);
+      window.setTimeout(() => setCopiedToken(false), 2000);
     } catch {
       // Ignore clipboard failure
     }
   };
 
-  const handleProgramCardSubmit = async (e: React.FormEvent, localOnly = false) => {
-    e.preventDefault();
+  const handleProgramCardSubmit = async (e?: React.FormEvent, localOnly = false) => {
+    e?.preventDefault();
     setProgramError('');
     setProgramMessage('');
     setPhysicalWriteConfirmed(false);
@@ -427,11 +429,10 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
 
     const finalUid = uidParsed.data;
     const newRecord = buildDraftRecord(finalUid, cleanCert, cleanCluster, cleanBlock, cleanCity);
-    const smartUrl = buildNfcSmartUrl(newRecord);
-    const minimalUrl = buildMinimalNfcUrl(finalUid);
+    const chipToken = buildNfcChipToken(newRecord);
 
     let physicalWriteNote =
-      'Data unit disimpan ke registri lokal BTN. Untuk menanam ke kartu fisik dari Laptop/iPhone, salin Smart URL di sebelah kanan lalu tulis via aplikasi NFC Tools.';
+      'Data unit disimpan ke registri lokal BTN. Untuk menanam ke kartu fisik dari Laptop/iPhone, salin Token Chip NFC Privat di sebelah kanan lalu tulis sebagai Text Record via aplikasi NFC Tools.';
     let wrotePhysical = false;
 
     if (hasWebNfc && !localOnly) {
@@ -440,32 +441,45 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
       writeAbortRef.current = controller;
 
       setProgramStatus('waiting-tap');
+      setNfcModalOpen(true);
+      setNfcModalPhase('waiting');
+      setNfcModalTitle('Tempelkan Kartu Kunci BTN');
+      setNfcModalMessage(
+        'Dekatkan kartu NFC ke bagian belakang HP Android Anda seperti saat top up e-Money. Jangan geser kartu hingga penulisan selesai.'
+      );
+
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const ReaderCtor = (window as any).NDEFReader;
         const ndef = new ReaderCtor();
-        // Write compact cross-device Smart URL (~105 bytes — fits NTAG213/215/216 and works on Android & iPhone!)
+        // Write PRIVATE non-URL text token (~75 bytes — fits NTAG213/215/216 and NEVER triggers auto-login if stolen!)
         try {
           await ndef.write(
             {
-              records: [{ recordType: 'url', data: smartUrl }],
+              records: [{ recordType: 'text', data: chipToken }],
             },
             { signal: controller.signal, overwrite: true }
           );
           wrotePhysical = true;
-          physicalWriteNote = `BERHASIL ditulis langsung ke chip NFC fisik (${estimateNdefUrlBytes(smartUrl)} byte · Smart URL lintas Android & iPhone)!`;
+          physicalWriteNote = `BERHASIL ditulis ke chip NFC fisik (${estimateNdefTextBytes(chipToken)} byte · Token Privat Aman — wajib login sebelum scan)!`;
         } catch (firstErr: unknown) {
           if (controller.signal.aborted) throw firstErr;
-          // Automatic fallback to ultra-minimal URL (<56 bytes) if chip has tiny locked capacity
+          // Minimal UID fallback if chip has unusually tiny capacity
           await ndef.write(
             {
-              records: [{ recordType: 'url', data: minimalUrl }],
+              records: [{ recordType: 'text', data: finalUid }],
             },
             { signal: controller.signal, overwrite: true }
           );
           wrotePhysical = true;
-          physicalWriteNote = `BERHASIL ditulis ke chip NFC fisik (mode ringkas ${estimateNdefUrlBytes(minimalUrl)} byte · UID ${finalUid}).`;
+          physicalWriteNote = `BERHASIL ditulis ke chip NFC fisik (mode ringkas UID ${finalUid}).`;
         }
+
+        setNfcModalPhase('success');
+        setNfcModalTitle('Kartu NFC Berhasil Diprogram!');
+        setNfcModalMessage(
+          `Token privat unit ${cleanCluster} ${cleanBlock} untuk ${selectedTargetUser.name} telah tertanam di chip fisik. Nasabah wajib login dulu lalu pindai di menu Scan Kartu.`
+        );
       } catch (err: unknown) {
         writeAbortRef.current = null;
         if (controller.signal.aborted) {
@@ -474,12 +488,16 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
         }
         const errName = (err as { name?: string })?.name || '';
         const errMsg = (err as { message?: string })?.message || '';
-        setProgramStatus('idle');
-        setProgramError(
+        const friendlyErr =
           errName === 'NotAllowedError'
             ? 'Izin NFC ditolak browser. Aktifkan NFC di pengaturan HP Android lalu izinkan akses NFC di Chrome.'
-            : `Gagal menulis ke chip NFC fisik (${errName || 'error'}${errMsg ? `: ${errMsg}` : ''}). Pastikan kartu NFC jenis NTAG213/215/216 (tidak terkunci/read-only) dan tempelkan rapat di belakang HP, atau klik "Simpan Registri Lokal Saja".`
-        );
+            : `Gagal menulis ke chip NFC (${errName || 'error'}${errMsg ? `: ${errMsg}` : ''}). Pastikan kartu NFC NTAG213/215/216 tidak terkunci (read-only) dan tahan rapat di belakang HP.`;
+
+        setProgramStatus('idle');
+        setNfcModalPhase('error');
+        setNfcModalTitle('Gagal Menulis ke Chip NFC');
+        setNfcModalMessage(friendlyErr);
+        setProgramError(friendlyErr);
         return;
       } finally {
         writeAbortRef.current = null;
@@ -494,7 +512,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
         setPhysicalWriteConfirmed(wrotePhysical);
         setProgramStatus('success');
         setProgramMessage(
-          `${physicalWriteNote} Akun ${selectedTargetUser.name} kini aktif untuk UID ${finalUid}.`
+          `${physicalWriteNote} Akun ${selectedTargetUser.name} kini dapat memindai ${finalUid} setelah login di menu Scan Kartu.`
         );
       },
       wrotePhysical ? 150 : 350
@@ -1154,7 +1172,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
                       Tempelkan kartu NFC fisik ke belakang HP sekarang...
                     </div>
                     <div className="text-ink-secondary">
-                      Tahan 1–2 detik hingga browser selesai menulis Smart URL ({liveSmartUrlBytes} byte) ke chip.
+                      Tahan 1–2 detik hingga browser selesai menulis Token Privat ({liveChipBytes} byte) ke chip.
                     </div>
                   </div>
                 </div>
@@ -1182,7 +1200,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
                   <span>
                     {physicalWriteConfirmed
-                      ? 'Chip NFC Fisik Berhasil Diprogram (Aktif Lintas Android & iPhone!)'
+                      ? 'Chip NFC Fisik Berhasil Diprogram (Token Privat Aman · Wajib Login)'
                       : 'Kartu Kunci Pintar NFC Berhasil Diprogram & Diaktifkan'}
                   </span>
                 </div>
@@ -1245,7 +1263,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
                 </span>
               </span>
               <span className="font-mono text-[11px] font-bold whitespace-nowrap">
-                ~{liveSmartUrlBytes} B
+                ~{liveChipBytes} B
               </span>
             </div>
 
@@ -1316,28 +1334,25 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
               </div>
 
               <div className="text-xs text-blue-100 leading-relaxed space-y-1">
-                <div className="font-semibold text-white">Payload data tertanam ke chip fisik:</div>
-                <div>
-                  • Luas Tanah {selectedTemplate.luasTanah} m² · Bangunan{' '}
-                  {selectedTemplate.luasBangunanEksisting} m² · {formatRupiah(nilaiAwal, true)}
-                </div>
-                <div>• Ukuran payload: ~{liveSmartUrlBytes} byte (muat di NTAG213 / 215 / 216)</div>
-                <div>• Lintas HP: Tap di Android Chrome maupun iPhone langsung terbuka</div>
+                <div className="font-semibold text-white">Keamanan chip (Model e-Money BTN):</div>
+                <div>• Bukan URL publik — aman jika kartu hilang atau dicuri</div>
+                <div>• Ukuran token privat: ~{liveChipBytes} byte (muat di NTAG213 / 215 / 216)</div>
+                <div>• Nasabah wajib login sandi + cocok pemilik baru bisa buka denah</div>
               </div>
             </div>
 
-            {/* 1-Click Copy Smart URL for NFC Tools App (iPhone / Android / Laptop Backup!) */}
+            {/* 1-Click Copy Private Token for NFC Tools App (Text Record, NOT URL!) */}
             <div className="p-4 rounded-card border border-hairline bg-well space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-ink">
-                  Smart URL Kartu NFC (untuk aplikasi NFC Tools)
+                  Token Chip NFC Privat (bukan link publik)
                 </span>
                 <button
                   type="button"
-                  onClick={handleCopySmartUrl}
+                  onClick={handleCopyChipToken}
                   className="inline-flex items-center gap-1 h-7 px-2.5 rounded-control bg-sheet border border-control hover:border-brand text-xs font-semibold text-brand transition-colors"
                 >
-                  {copiedSmartUrl ? (
+                  {copiedToken ? (
                     <>
                       <Check className="w-3.5 h-3.5 text-positive" aria-hidden="true" />
                       <span className="text-positive">Tersalin!</span>
@@ -1345,16 +1360,16 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
                   ) : (
                     <>
                       <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Salin URL</span>
+                      <span>Salin Token</span>
                     </>
                   )}
                 </button>
               </div>
               <div className="p-2.5 rounded-control bg-sheet border border-hairline font-mono text-[11px] text-ink-secondary break-all leading-relaxed select-all">
-                {livePreviewSmartUrl}
+                {liveChipToken}
               </div>
               <p className="text-[11.5px] text-ink-secondary leading-relaxed">
-                <strong>Tips Demo Langsung:</strong> Di HP Android Chrome, cukup klik tombol biru di kiri lalu tempel kartu fisik. Jika memakai iPhone, salin URL di atas → buka aplikasi <strong>NFC Tools</strong> → <em>Write → Add a record → URL/URI</em> → tempel kartu. Setelah itu kartu fisik bisa langsung di-tap dari iPhone maupun Android!
+                <strong>Cara Program (seperti Top Up e-Money):</strong> Di HP Android Chrome, cukup klik tombol biru di kiri lalu tempel kartu di belakang HP. Jika memakai aplikasi <strong>NFC Tools</strong>, pilih <em>Write → Add a record → Text</em> (bukan URL) lalu tempel token di atas.
               </p>
             </div>
           </aside>
@@ -1535,6 +1550,22 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
           </section>
         </div>
       )}
+
+      {/* e-Money Style NFC Tap Modal for Physical Chip Programming */}
+      <NfcTapModal
+        isOpen={nfcModalOpen}
+        mode="write"
+        phase={nfcModalPhase}
+        title={nfcModalTitle}
+        message={nfcModalMessage}
+        cardUid={nfcUid}
+        cardSubtitle={`${selectedTargetUser?.name || '-'} · ${clusterName || '-'} ${unitBlock || ''}`}
+        payloadBytes={liveChipBytes}
+        onCancel={handleCancelPhysicalWrite}
+        onRetry={() => handleProgramCardSubmit(undefined, false)}
+        onPrimaryAction={() => setNfcModalOpen(false)}
+        primaryActionLabel="Selesai"
+      />
     </div>
   );
 };
