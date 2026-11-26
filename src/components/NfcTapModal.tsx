@@ -145,6 +145,8 @@ export const NfcTapModal: React.FC<NfcTapModalProps> = ({
               className={`py-1.5 px-2 rounded-control border ${
                 phase === 'waiting'
                   ? 'bg-brand-soft border-brand text-brand'
+                  : isDanger && !cardUid
+                  ? 'bg-btnred-soft border-btnred-border text-btnred'
                   : 'bg-positive-soft/60 border-positive-border text-positive'
               }`}
             >
@@ -209,7 +211,7 @@ export const NfcTapModal: React.FC<NfcTapModalProps> = ({
                 onClick={onCancel}
                 className="w-full h-11 rounded-control border border-control bg-sheet hover:bg-well text-ink font-semibold text-sm transition-colors"
               >
-                {phase === 'success' ? 'Selesai' : 'Batalkan'}
+                {phase === 'success' ? 'Selesai' : isDanger ? 'Mengerti · Tutup' : 'Batalkan'}
               </button>
             )}
           </div>

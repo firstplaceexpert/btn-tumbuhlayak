@@ -41,18 +41,17 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
   onGoToLayer2,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [manualUid, setManualUid] = useState(
-    activeNfcRecord?.uid || user.assignedNfcUid || ''
-  );
+  const [manualUid, setManualUid] = useState(activeNfcRecord?.uid || '');
   const [scanPhase, setScanPhase] = useState<ScanPhase>(activeNfcRecord ? 'matched' : 'idle');
   const [scanMessage, setScanMessage] = useState<string>(
     activeNfcRecord
       ? `Kartu ${activeNfcRecord.uid} terverifikasi atas nama ${activeNfcRecord.ownerName}.`
-      : 'Tempelkan kartu kunci rumah NFC BTN pada perangkat Anda, atau masukkan nomor seri yang tercetak di belakang kartu.'
+      : 'Tempelkan kartu kunci rumah NFC BTN di belakang HP Android (Chrome) Anda, atau masukkan nomor seri / token kartu secara manual di bawah.'
   );
   const [matchedRecord, setMatchedRecord] = useState<NfcPropertyRecord | null>(activeNfcRecord);
   const [hardwareSerial, setHardwareSerial] = useState<string>('');
   const [hasWebNfc, setHasWebNfc] = useState(false);
+  const [deviceHint, setDeviceHint] = useState<'android-other' | 'ios' | 'desktop'>('desktop');
   const [tapModalOpen, setTapModalOpen] = useState(false);
   const [tapModalPhase, setTapModalPhase] = useState<NfcModalPhase>('waiting');
   const [tapModalTitle, setTapModalTitle] = useState('');
@@ -60,19 +59,24 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
   const scanAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    setHasWebNfc(typeof window !== 'undefined' && 'NDEFReader' in window);
+    const supported = typeof window !== 'undefined' && 'NDEFReader' in window;
+    setHasWebNfc(supported);
+    if (typeof navigator !== 'undefined') {
+      const ua = navigator.userAgent || '';
+      if (/iPhone|iPad|iPod/i.test(ua)) {
+        setDeviceHint('ios');
+      } else if (/Android/i.test(ua)) {
+        setDeviceHint('android-other');
+      } else {
+        setDeviceHint('desktop');
+      }
+    }
     return () => {
       if (scanAbortRef.current) {
         scanAbortRef.current.abort();
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!manualUid && user.assignedNfcUid) {
-      setManualUid(user.assignedNfcUid);
-    }
-  }, [user.assignedNfcUid, manualUid]);
 
   const stopPhysicalScan = () => {
     if (scanAbortRef.current) {
@@ -282,16 +286,20 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
       return;
     }
 
-    // Device without native Web NFC sensor (Desktop): verify entered/assigned UID or focus manual input
-    if (manualUid.trim()) {
-      triggerVerification(manualUid);
-    } else {
-      setScanPhase('idle');
-      setScanMessage(
-        'Untuk memindai chip fisik seperti top up e-Money, buka halaman ini di Google Chrome HP Android (NFC aktif). Di desktop, masukkan nomor seri kartu atau token di bawah.'
-      );
-      inputRef.current?.focus();
-    }
+    // Device/browser without native Web NFC sensor: NEVER fake-verify or auto-unlock!
+    const unavailableMsg =
+      deviceHint === 'ios'
+        ? 'Browser di iPhone/iPad (Safari & Chrome iOS) belum mengizinkan akses sensor Web NFC langsung dari web. Untuk pindai kartu fisik ala e-Money, buka tumbuhlayak.vercel.app di Google Chrome HP Android (NFC aktif), atau masukkan nomor seri / token kartu secara manual di bawah.'
+        : deviceHint === 'android-other'
+        ? 'Browser Android yang Anda pakai saat ini belum mendukung Web NFC (mis. in-app browser WhatsApp/Instagram/Firefox/Samsung Internet). Buka link https://tumbuhlayak.vercel.app langsung di aplikasi Google Chrome dengan fitur NFC HP menyala.'
+        : 'Perangkat laptop/komputer ini tidak memiliki sensor NFC fisik. Untuk demo tap kartu langsung ala top-up e-Money, buka https://tumbuhlayak.vercel.app di Google Chrome HP Android (NFC aktif), atau masukkan nomor seri / token kartu secara manual di kolom bawah.';
+
+    setScanPhase('error');
+    setScanMessage(unavailableMsg);
+    setTapModalOpen(true);
+    setTapModalPhase('error');
+    setTapModalTitle('Sensor NFC Tidak Terdeteksi di Browser Ini');
+    setTapModalMessage(unavailableMsg);
   };
 
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -381,6 +389,28 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
           aria-label="Pemindai kartu kunci rumah NFC BTN"
           className="lg:col-span-7 border border-hairline rounded-[18px] bg-sheet p-6 sm:p-7 space-y-6"
         >
+          {/* Live Hardware Web NFC Readiness Indicator */}
+          <div
+            className={`px-3.5 py-2.5 rounded-card border text-xs flex items-center justify-between gap-2 ${
+              hasWebNfc
+                ? 'bg-positive-soft/70 border-positive-border text-positive'
+                : 'bg-ochre-soft/60 border-ochre-border text-ochre'
+            }`}
+          >
+            <span className="inline-flex items-center gap-2 font-semibold">
+              <Smartphone className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+              <span>
+                {hasWebNfc
+                  ? 'Sensor Web NFC Chrome Android Aktif · Siap Tap Kartu Fisik'
+                  : deviceHint === 'ios'
+                  ? 'Browser iPhone/iPad belum mendukung Web NFC · Gunakan Chrome Android / Input Manual'
+                  : deviceHint === 'android-other'
+                  ? 'Buka halaman ini di Google Chrome Android (HTTPS) agar sensor NFC aktif'
+                  : 'Mode Desktop (tanpa sensor NFC) · Tap fisik aktif di Google Chrome HP Android'}
+              </span>
+            </span>
+          </div>
+
           {/* Visual NFC Sensor Pad */}
           <div className="p-6 sm:p-8 rounded-card bg-well border border-hairline flex flex-col items-center text-center space-y-4">
             <div className="relative flex items-center justify-center w-24 h-24">
@@ -425,7 +455,9 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
                   : scanPhase === 'frozen'
                   ? 'Kartu Kunci NFC Dibekukan (Tunggakan Iuran)'
                   : scanPhase === 'error'
-                  ? 'Verifikasi Kartu Gagal'
+                  ? !hasWebNfc && !manualUid.trim()
+                    ? 'Sensor NFC Tidak Tersedia di Perangkat Ini'
+                    : 'Verifikasi Kartu Gagal'
                   : 'Siap Memindai Kartu Kunci Rumah'}
               </div>
               <p
@@ -602,8 +634,13 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
             ? `${matchedRecord.ownerName} · ${matchedRecord.clusterName} ${matchedRecord.unitBlock}`
             : `Akun terverifikasi: ${user.name}`
         }
-        onCancel={stopPhysicalScan}
-        onRetry={handleScanButtonClick}
+        onCancel={() => {
+          stopPhysicalScan();
+          if (!hasWebNfc) {
+            inputRef.current?.focus();
+          }
+        }}
+        onRetry={hasWebNfc ? handleScanButtonClick : undefined}
         onPrimaryAction={() => {
           setTapModalOpen(false);
           onGoToLayer2();

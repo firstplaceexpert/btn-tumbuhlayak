@@ -1226,7 +1226,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
                     ? 'Menyimpan data kartu...'
                     : hasWebNfc
                     ? 'Tulis ke Chip NFC Fisik & Aktifkan'
-                    : 'Program & Terbitkan Kartu Kunci NFC BTN'}
+                    : 'Simpan Data Unit & Buat Token NFC'}
                 </span>
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </button>
