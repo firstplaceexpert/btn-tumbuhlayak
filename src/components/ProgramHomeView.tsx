@@ -1,32 +1,35 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { DemoUser } from '../types';
-import { ARISAN_LOCATION_ZONES, OFFICIAL_REGULATION_SOURCES } from '../data/arisanLocations';
-import { calculateClusterScheme } from '../lib/clusterScheme';
-import { formatRupiah } from '../lib/formatters';
+import { BtnHousingProject, DemoUser } from '../types';
+import { ARISAN_LOCATION_ZONES } from '../data/arisanLocations';
+import { BTN_HOUSING_CATALOG, getProjectsByZone } from '../data/btnHousingCatalog';
+import { PropertyArisanCard } from './PropertyArisanCard';
 import { BtnLogo } from './BtnLogo';
-import { AnimatedNumber } from './AnimatedNumber';
 import {
   ArrowRight,
+  Building2,
+  CalendarClock,
   CheckCircle2,
   Compass,
+  CreditCard,
+  Dices,
+  Home,
+  Lock,
   MapPin,
+  ShieldAlert,
   ShieldCheck,
-  Building2,
   Users,
   Wifi,
-  Home,
-  CreditCard,
 } from 'lucide-react';
 
 interface ProgramHomeViewProps {
-  /** When logged in, renders as the personalized Beranda inside AppShell; when null, renders the full public promotional landing page */
+  /** When logged in, renders as personalized Beranda inside AppShell; when null, renders full public landing page */
   user: DemoUser | null;
   hasUnlockedNfc?: boolean;
-  onOpenRegister?: (preselectedZoneId?: string) => void;
+  onOpenRegister?: (preselectedZoneId?: string, preselectedProjectId?: string) => void;
   onOpenLogin?: () => void;
-  onGoToArisan?: (zoneId?: string) => void;
+  onGoToArisan?: (zoneId?: string, projectId?: string) => void;
   onGoToNfc?: () => void;
   onGoToPlanner?: () => void;
 }
@@ -40,45 +43,51 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
   onGoToNfc,
   onGoToPlanner,
 }) => {
-  const initialZoneId =
-    user?.domicileZoneId && ARISAN_LOCATION_ZONES.some((z) => z.id === user.domicileZoneId)
-      ? user.domicileZoneId
-      : ARISAN_LOCATION_ZONES[0].id;
-
-  const [previewZoneId, setPreviewZoneId] = useState<string>(initialZoneId);
-
-  const previewZone = useMemo(
-    () =>
-      ARISAN_LOCATION_ZONES.find((z) => z.id === previewZoneId) || ARISAN_LOCATION_ZONES[0],
-    [previewZoneId]
-  );
-
-  const previewSim = useMemo(
-    () =>
-      calculateClusterScheme({
-        members: previewZone.defaultQuota,
-        dailyContribution: previewZone.defaultDailyContribution,
-        housePrice: previewZone.officialFlppPrice,
-        annualPriceGrowth: previewZone.defaultInflationRate,
-        akadPerDay: 5,
-        readinessThreshold: 15000000,
-        tenorYears: 20,
-        kprRate: 0.05,
-        downPaymentShare: 0.01,
-        horizonYears: 6,
-      }),
-    [previewZone]
-  );
-
   const isPublic = !user;
+
+  const userZone = useMemo(
+    () =>
+      ARISAN_LOCATION_ZONES.find((z) => z.id === user?.domicileZoneId) ||
+      ARISAN_LOCATION_ZONES[0],
+    [user?.domicileZoneId]
+  );
+
+  // Public visitors can browse Featured ("pilihan") or any of the 7 zones;
+  // Logged-in customers are strictly locked to their own domicile zone.
+  const [selectedFilterZone, setSelectedFilterZone] = useState<string>('pilihan');
+
+  const visibleProjects: BtnHousingProject[] = useMemo(() => {
+    if (!isPublic) {
+      return getProjectsByZone(userZone.id);
+    }
+    if (selectedFilterZone === 'pilihan') {
+      // Showcase real reference projects: Grand Harmoni Park (Bekasi), Keandra Park Tahap 2 (Cirebon), & Pesona Ungaran Rp 170 Jt (3.400 org)
+      const featuredIds = [
+        'grand-harmoni-park',
+        'keandra-park-tahap-2',
+        'pesona-ungaran-residence',
+      ];
+      return featuredIds
+        .map((id) => BTN_HOUSING_CATALOG.find((p) => p.id === id))
+        .filter((p): p is BtnHousingProject => Boolean(p));
+    }
+    return getProjectsByZone(selectedFilterZone);
+  }, [isPublic, userZone.id, selectedFilterZone]);
+
+  const handleSelectProject = (project: BtnHousingProject) => {
+    if (isPublic) {
+      onOpenRegister?.(project.zoneId, project.id);
+    } else {
+      onGoToArisan?.(project.zoneId, project.id);
+    }
+  };
 
   const content = (
     <div className="space-y-10 animate-panel-enter">
       {/* ================================================================= */}
-      {/* COLORFUL HERO BANNER (BTN Royal Blue + Red + Gold + Warm Cream)   */}
+      {/* 1. COLORFUL BTN HERO BANNER (Konsep Arisan Harian 1 Rumah / Hari) */}
       {/* ================================================================= */}
       <section className="rounded-[20px] border border-hairline bg-gradient-to-br from-[#EEF4FD] via-[#FCFBF8] to-[#FEF7EA] p-6 sm:p-8 lg:p-10 overflow-hidden relative">
-        {/* Soft decorative BTN color accents (gentle pastel, low glare) */}
         <div
           className="pointer-events-none absolute -top-16 -right-16 w-64 h-64 rounded-full bg-brand/10 blur-2xl"
           aria-hidden="true"
@@ -89,7 +98,6 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
-          {/* Left Copy & Action Buttons */}
           <div className="lg:col-span-6 space-y-5">
             {isPublic ? (
               <div className="inline-flex flex-wrap items-center gap-2">
@@ -98,7 +106,7 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
                   Program BTN Housingpreneur Batch 3
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-btnred-soft text-btnred border border-btnred-border text-xs font-semibold">
-                  Arisan Klaster + KPR FLPP
+                  Arisan Harian · 1 Rumah / Hari
                 </span>
               </div>
             ) : (
@@ -119,22 +127,33 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
             <h1 className="font-display text-2xl sm:text-3xl lg:text-[34px] font-bold text-ink leading-[1.2] tracking-[-0.02em]">
               {isPublic ? (
                 <>
-                  Punya rumah BTN pertama lebih ringan,{' '}
-                  <span className="text-brand">tumbuh bersama keluarga</span>
+                  Arisan rumah BTN harian:{' '}
+                  <span className="text-brand">Rp 50rb/hari, 1 rumah diundi tiap hari</span>
                 </>
               ) : (
                 <>
-                  Siap wujudkan rumah impian BTN di{' '}
-                  <span className="text-brand">{previewZone.shortLabel}</span>?
+                  Pilih perumahan BTN di{' '}
+                  <span className="text-brand">{userZone.shortLabel}</span> &amp; pantau kuota arisan harian
                 </>
               )}
             </h1>
 
             <p className="text-[15px] text-ink-secondary leading-relaxed">
               {isPublic
-                ? 'Mulai nabung harian bareng klaster wilayah domisili Anda untuk menyiapkan akad KPR FLPP BTN, terima Kartu Kunci Pintar NFC, dan rancang denah rumah tumbuh sesuai rencana keluarga.'
-                : 'Wilayah klaster arisan Anda otomatis disesuaikan dengan data domisili di akun BTN Anda. Pantau kesiapan akad, cek kelayakan, atau kelola denah rumah tumbuh kapan saja.'}
+                ? 'Pilih proyek perumahan mitra Bank BTN seperti Grand Harmoni Park atau Keandra Park. Harga rumah dibagi Rp 50.000/hari menentukan kuota klaster — begitu kuota terpenuhi, 1 unit rumah diundi setiap hari dengan jaminan sertifikat SHM di Bank BTN.'
+                : 'Daftar proyek perumahan otomatis disaring sesuai wilayah domisili akun Anda. Pilih proyek, cek sisa kuota agar undian harian berjalan, atau pindai Kartu Kunci NFC untuk membuka denah rumah tumbuh.'}
             </p>
+
+            {/* Clear Formula Strip */}
+            <div className="p-3.5 rounded-[12px] bg-sheet/90 border border-brand-border/80 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+              <span className="font-semibold text-brand">Contoh nyata:</span>
+              <span className="text-ink tabular-nums">
+                Rumah <strong>Rp 170 Jt</strong> ÷ <strong>Rp 50rb/hari</strong> ={' '}
+                <strong className="text-brand">3.400 peserta</strong> ·{' '}
+                <strong className="text-positive">1 unit diundi setiap hari</strong> · durasi{' '}
+                <strong>9,3 tahun</strong>
+              </span>
+            </div>
 
             {/* Primary CTA Buttons */}
             <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -142,7 +161,7 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
                 <>
                   <button
                     type="button"
-                    onClick={() => onOpenRegister?.(previewZone.id)}
+                    onClick={() => onOpenRegister?.('jabodetabek', 'grand-harmoni-park')}
                     className="h-12 px-6 rounded-[11px] bg-brand hover:bg-brand-hover text-white font-display font-semibold text-sm inline-flex items-center gap-2 shadow-[0_6px_18px_-6px_rgba(27,86,198,0.5)] transition-colors"
                   >
                     <span>Tertarik? Daftar Sekarang</span>
@@ -187,22 +206,6 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
                 </>
               )}
             </div>
-
-            {/* Warm Trust Highlights */}
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-2 text-xs text-ink-secondary">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-brand" aria-hidden="true" />
-                Acuan resmi Kepmen PUPR 689/2023
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-btnred" aria-hidden="true" />
-                Bunga KPR FLPP 5% tetap
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-positive" aria-hidden="true" />
-                Tabungan tetap milik nasabah
-              </span>
-            </div>
           </div>
 
           {/* Right Friendly BTN Cartoon Illustration */}
@@ -210,20 +213,19 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
             <div className="relative rounded-[18px] bg-[#F6F4EF] border border-hairline p-3 sm:p-4 shadow-[0_14px_34px_-18px_rgba(31,36,43,0.18)]">
               <img
                 src="/illustrations/hero-home-btn.jpg"
-                alt="Ilustrasi keluarga muda Indonesia di depan rumah KPR BTN memegang kunci dan kartu pintar"
+                alt="Ilustrasi keluarga muda Indonesia di depan rumah BTN memegang kunci dan kartu pintar NFC"
                 className="w-full h-auto rounded-[13px] object-cover block"
               />
-              {/* Friendly colorful floating pill badges */}
               <div className="mt-3 flex flex-wrap items-center justify-between gap-1.5 px-0.5">
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-sheet border border-hairline text-[11px] font-semibold text-brand whitespace-nowrap">
                   <Home className="w-3 h-3" aria-hidden="true" />
-                  Tipe 36/60 · 30/60 · 36/72
+                  Katalog Mitra BTN Properti
                 </span>
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-ochre-soft border border-ochre-border text-[11px] font-semibold text-ochre whitespace-nowrap">
-                  Mulai Rp 50rb/hari
+                  Undian Harian · Rp 50rb/hr
                 </span>
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-positive-soft border border-positive-border text-[11px] font-semibold text-positive whitespace-nowrap">
-                  Kartu Kunci NFC
+                  Jaminan SHM &amp; Kartu NFC
                 </span>
               </div>
             </div>
@@ -254,8 +256,8 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
               </div>
             )}
             <div>
-              <span className="text-ink-secondary">Zona KPR otomatis:</span>{' '}
-              <strong className="text-brand">{previewZone.regionName}</strong>
+              <span className="text-ink-secondary">Wilayah domisili:</span>{' '}
+              <strong className="text-brand">{userZone.regionName}</strong>
             </div>
           </div>
 
@@ -264,51 +266,59 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
             onClick={() => onGoToArisan?.(user.domicileZoneId)}
             className="self-start md:self-auto text-xs font-semibold text-brand hover:underline inline-flex items-center gap-1 whitespace-nowrap"
           >
-            <span>Lihat klaster domisili saya</span>
+            <span>Lihat detail arisan wilayah saya</span>
             <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </section>
       )}
 
       {/* ================================================================= */}
-      {/* INTERACTIVE QUICK TOOL: "TERTARIK? CEK ESTIMASI WILAYAHMU DULU!"  */}
+      {/* 2. KATALOG PERUMAHAN MITRA BTN (Kartu Ala BTN Properti + Kuota)   */}
       {/* ================================================================= */}
       <section
-        id="cek-wilayah"
-        aria-label="Alat cek cepat estimasi rumah subsidi per wilayah"
-        className="rounded-[18px] border border-brand-border/80 bg-sheet p-6 sm:p-7 space-y-5"
+        id="katalog-perumahan"
+        aria-label="Katalog perumahan mitra BTN untuk arisan harian"
+        className="space-y-5"
       >
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-          <div>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
+          <div className="space-y-1">
             <span className="text-xs font-semibold text-btnred uppercase tracking-wide">
-              {isPublic ? 'Cek cepat 10 detik' : 'Ringkasan domisili akun'}
-            </span>
-            <h2 className="font-display text-lg sm:text-xl font-bold text-ink mt-0.5">
               {isPublic
-                ? 'Pilih domisili Anda untuk melihat harga rumah subsidi BTN'
-                : `Harga & estimasi rumah subsidi BTN wilayah ${previewZone.regionName}`}
+                ? 'Katalog Perumahan Mitra Bank BTN'
+                : `Katalog Perumahan Wilayah ${userZone.shortLabel}`}
+            </span>
+            <h2 className="font-display text-xl sm:text-2xl font-bold text-ink">
+              {isPublic
+                ? 'Pilih rumah BTN impian, cek iuran harian & sisa kuota klaster'
+                : `Unit perumahan mitra BTN sesuai domisili Anda (${user.domicileCity || userZone.shortLabel})`}
             </h2>
+            <p className="text-xs text-ink-secondary">
+              Kuota otomatis dihitung dari <strong>Harga Rumah ÷ Iuran Harian</strong> agar setiap hari terkumpul tepat 1 unit rumah untuk diundi. Angka peserta terdaftar adalah data simulasi.
+            </p>
           </div>
-          <a
-            href={OFFICIAL_REGULATION_SOURCES.kepmenPupr689Url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-brand font-medium hover:underline"
-          >
-            Acuan Kepmen PUPR 689/2023 (berlaku sejak 2024)
-          </a>
         </div>
 
-        {/* Friendly 7-Region Pill Selector (Public visitors only; logged-in users stay strictly on their domicile!) */}
+        {/* Region Filter Pills (Public only; logged-in customers see ONLY their domicile zone) */}
         {isPublic && (
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedFilterZone('pilihan')}
+              className={`px-3.5 py-2 rounded-full text-xs font-semibold border transition-colors ${
+                selectedFilterZone === 'pilihan'
+                  ? 'bg-brand text-white border-brand shadow-[0_4px_12px_-4px_rgba(27,86,198,0.45)]'
+                  : 'bg-well text-ink-secondary border-hairline hover:border-brand-border hover:text-ink'
+              }`}
+            >
+              Pilihan Utama (Grand Harmoni &amp; Keandra)
+            </button>
             {ARISAN_LOCATION_ZONES.map((z) => {
-              const active = z.id === previewZone.id;
+              const active = z.id === selectedFilterZone;
               return (
                 <button
                   key={z.id}
                   type="button"
-                  onClick={() => setPreviewZoneId(z.id)}
+                  onClick={() => setSelectedFilterZone(z.id)}
                   className={`px-3.5 py-2 rounded-full text-xs font-semibold border transition-colors ${
                     active
                       ? 'bg-brand text-white border-brand shadow-[0_4px_12px_-4px_rgba(27,86,198,0.45)]'
@@ -322,193 +332,163 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
           </div>
         )}
 
-        {/* 3 Colorful, Easy-to-Read Summary Cards + Direct Register CTA */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-stretch">
-          <div className="p-4 rounded-[14px] bg-brand-soft/75 border border-brand-border space-y-1">
-            <div className="text-xs text-brand font-medium">Plafon rumah subsidi</div>
-            <div className="font-display text-xl font-bold text-ink tabular-nums">
-              <AnimatedNumber
-                value={previewZone.officialFlppPrice}
-                format={(n) => formatRupiah(n, true)}
-              />
-            </div>
-            <div className="text-xs text-ink-secondary truncate">{previewZone.sampleCities}</div>
-          </div>
-
-          <div className="p-4 rounded-[14px] bg-ochre-soft/80 border border-ochre-border space-y-1">
-            <div className="text-xs text-ochre font-medium">Bantuan uang muka (SBUM)</div>
-            <div className="font-display text-xl font-bold text-ink tabular-nums">
-              {formatRupiah(previewZone.sbumAmount, true)}
-            </div>
-            <div className="text-xs text-ink-secondary">Bantuan pemerintah resmi</div>
-          </div>
-
-          <div className="p-4 rounded-[14px] bg-positive-soft/80 border border-positive-border space-y-1">
-            <div className="text-xs text-positive font-medium">Estimasi angsuran FLPP</div>
-            <div className="font-display text-xl font-bold text-ink tabular-nums">
-              <AnimatedNumber
-                value={previewSim.monthlyInstallment}
-                format={(n) => formatRupiah(Math.round(n))}
-              />
-              <span className="text-xs font-sans font-normal text-ink-secondary">/bln</span>
-            </div>
-            <div className="text-xs text-ink-secondary">Tenor 20 thn · bunga 5%</div>
-          </div>
-
-          <div className="p-4 rounded-[14px] btn-kpi-surface text-white flex flex-col justify-between gap-3">
-            <div className="text-xs text-blue-100 leading-snug">
-              Tertarik dengan klaster <strong className="text-white">{previewZone.shortLabel}</strong>?
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                isPublic
-                  ? onOpenRegister?.(previewZone.id)
-                  : onGoToArisan?.(previewZone.id)
-              }
-              className="w-full h-10 px-3 rounded-[9px] bg-sheet text-brand hover:bg-brand-soft font-display font-semibold text-xs inline-flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <span>{isPublic ? 'Daftar Wilayah Ini' : 'Buka Wilayah Ini'}</span>
-              <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-            </button>
-          </div>
+        {/* 3-Column BTN Properti Card Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {visibleProjects.map((project) => (
+            <PropertyArisanCard
+              key={project.id}
+              project={project}
+              actionLabel={isPublic ? 'Daftar Ikut Unit Ini' : 'Pilih & Simulasikan Unit'}
+              onAction={handleSelectProject}
+            />
+          ))}
         </div>
       </section>
 
       {/* ================================================================= */}
-      {/* 3 COLORFUL ILLUSTRATED PROGRAM STORY CARDS                        */}
+      {/* 3. STRUKTUR KONSEP JELAS: 4 PILAR ARISAN HARIAN + SKEMA RENTAL    */}
       {/* ================================================================= */}
-      <section id="cara-kerja" aria-label="Tiga langkah mudah program btn TumbuhLayak" className="space-y-5">
+      <section
+        aria-label="Struktur konsep arisan harian dan perlindungan gagal bayar"
+        className="space-y-6"
+      >
         <div className="text-center max-w-2xl mx-auto space-y-1.5">
           <span className="inline-flex items-center px-3 py-1 rounded-full bg-ochre-soft text-ochre border border-ochre-border text-xs font-semibold">
-            3 Langkah Sederhana · Tanpa Ribet
+            Struktur Konsep Jelas &amp; Terukur
           </span>
           <h2 className="font-display text-xl sm:text-2xl font-bold text-ink">
-            Bagaimana btn TumbuhLayak membantu Anda punya rumah?
+            Cara kerja Arisan Rumah Harian &amp; Proteksi Anti-Mangkir BTN
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Card 1: Arisan Klaster */}
-          <article className="rounded-[18px] border border-brand-border/80 bg-sheet overflow-hidden flex flex-col">
-            <div className="bg-[#FCFBF8] p-4 border-b border-rule">
-              <img
-                src="/illustrations/step-arisan-saving.jpg"
-                alt="Ilustrasi menabung bersama di klaster rumah BTN"
-                className="w-full aspect-[4/3] object-cover rounded-[12px]"
-              />
+        {/* 4 Structured Pillar Steps */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <article className="p-5 rounded-[16px] border border-hairline bg-sheet space-y-2.5">
+            <div className="w-9 h-9 rounded-[10px] bg-brand-soft text-brand flex items-center justify-center">
+              <Building2 className="w-4 h-4" aria-hidden="true" />
             </div>
-            <div className="p-5 flex-1 flex flex-col justify-between gap-3">
-              <div className="space-y-2">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-brand-soft text-brand text-xs font-bold">
-                  Langkah 1 · Menabung Kolektif
-                </span>
-                <h3 className="font-display text-base font-bold text-ink">
-                  Arisan Klaster + KPR FLPP BTN
-                </h3>
-                <p className="text-[13px] text-ink-secondary leading-relaxed">
-                  Tabung rutin sesuai kemampuan di rekening BTN milik sendiri untuk menyiapkan DP & biaya akad, sehingga waktu tunggu jauh lebih singkat dibanding arisan tunai biasa.
-                </p>
-              </div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-brand">
+              1 · Data Perumahan BTN
             </div>
+            <h3 className="font-display text-[15px] font-bold text-ink">
+              Proyek nyata mitra BTN
+            </h3>
+            <p className="text-xs text-ink-secondary leading-relaxed">
+              Mengambil unit perumahan resmi mitra Bank BTN (mis. Grand Harmoni Park Rp 185 Jt atau Keandra Park Rp 168 Jt) sesuai wilayah domisili peserta.
+            </p>
           </article>
 
-          {/* Card 2: Kartu Kunci NFC */}
-          <article className="rounded-[18px] border border-btnred-border bg-sheet overflow-hidden flex flex-col">
-            <div className="bg-gradient-to-br from-[#163F92] to-[#1B56C6] p-6 aspect-[4/3] flex flex-col items-center justify-center relative overflow-hidden border-b border-rule">
-              <div
-                className="w-40 h-40 rounded-full bg-white/10 absolute -top-10 -right-10"
-                aria-hidden="true"
-              />
-              <div
-                className="w-32 h-32 rounded-full bg-btnred/30 absolute -bottom-10 -left-8"
-                aria-hidden="true"
-              />
-              {/* Stylized BTN Smart Key Card Visual */}
-              <div className="relative z-10 w-full max-w-[260px] rounded-[16px] bg-sheet text-ink p-4 shadow-[0_14px_30px_-10px_rgba(0,0,0,0.35)] border border-white/60 space-y-4">
-                <div className="flex items-center justify-between">
-                  <BtnLogo size="sm" />
-                  <span className="w-8 h-8 rounded-full bg-brand-soft text-brand flex items-center justify-center">
-                    <Wifi className="w-4 h-4" aria-hidden="true" />
-                  </span>
-                </div>
-                <div className="space-y-0.5">
-                  <div className="text-[10px] uppercase tracking-wider text-ink-subtle font-semibold">
-                    Kartu Kunci Pintar NFC
-                  </div>
-                  <div className="font-mono text-sm font-bold text-brand">BTN-NFC-3672-0014</div>
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-ink-secondary pt-1 border-t border-rule">
-                  <span>Tipe 36/72 BTN</span>
-                  <span className="px-2 py-0.5 rounded-full bg-positive-soft text-positive font-semibold">
-                    Terverifikasi
-                  </span>
-                </div>
-              </div>
+          <article className="p-5 rounded-[16px] border border-hairline bg-sheet space-y-2.5">
+            <div className="w-9 h-9 rounded-[10px] bg-ochre-soft text-ochre flex items-center justify-center">
+              <CalendarClock className="w-4 h-4" aria-hidden="true" />
             </div>
-            <div className="p-5 flex-1 flex flex-col justify-between gap-3">
-              <div className="space-y-2">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-btnred-soft text-btnred text-xs font-bold">
-                  Langkah 2 · Serah Terima Digital
-                </span>
-                <h3 className="font-display text-base font-bold text-ink">
-                  Kartu Kunci Pintar NFC BTN
-                </h3>
-                <p className="text-[13px] text-ink-secondary leading-relaxed">
-                  Saat akad selesai, Anda menerima kartu kunci fisik berchip NFC. Cukup pindai di website untuk membuka data sertifikat, denah asli rumah, dan estimasi nilainya.
-                </p>
-              </div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-ochre">
+              2 · Rumus Kuota Pas
             </div>
+            <h3 className="font-display text-[15px] font-bold text-ink">
+              Harga ÷ Rp 50rb/hari
+            </h3>
+            <p className="text-xs text-ink-secondary leading-relaxed">
+              Contoh rumah Rp 170 Jt ÷ Rp 50rb/hr = <strong>3.400 peserta</strong>. Begitu kuota terpenuhi, terkumpul Rp 170 Jt tiap hari selama 9,3 tahun.
+            </p>
           </article>
 
-          {/* Card 3: Rumah Tumbuh & Denah */}
-          <article className="rounded-[18px] border border-positive-border bg-sheet overflow-hidden flex flex-col">
-            <div className="bg-[#FCFBF8] p-4 border-b border-rule">
-              <img
-                src="/illustrations/step-growing-house.jpg"
-                alt="Ilustrasi rumah tumbuh BTN berkembang menjadi dua lantai lengkap dengan denah"
-                className="w-full aspect-[4/3] object-cover rounded-[12px]"
-              />
+          <article className="p-5 rounded-[16px] border border-hairline bg-sheet space-y-2.5">
+            <div className="w-9 h-9 rounded-[10px] bg-positive-soft text-positive flex items-center justify-center">
+              <Dices className="w-4 h-4" aria-hidden="true" />
             </div>
-            <div className="p-5 flex-1 flex flex-col justify-between gap-3">
-              <div className="space-y-2">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-positive-soft text-positive text-xs font-bold">
-                  Langkah 3 · Tumbuh Bertahap
-                </span>
-                <h3 className="font-display text-base font-bold text-ink">
-                  Editor Denah & Nilai Rumah Tumbuh
-                </h3>
-                <p className="text-[13px] text-ink-secondary leading-relaxed">
-                  Susun rencana dapur, kanopi, kamar tambahan, hingga lantai 2 langsung di denah rumah BTN Anda, lengkap dengan estimasi biaya RAB dan proyeksi nilai aset.
-                </p>
-              </div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-positive">
+              3 · Undian Setiap Hari
             </div>
+            <h3 className="font-display text-[15px] font-bold text-ink">
+              1 pemenang tiap hari
+            </h3>
+            <p className="text-xs text-ink-secondary leading-relaxed">
+              Diundi setiap hari oleh Admin Operasional BTN sehingga peserta antusias — setiap hari ada 1 keluarga yang langsung terima Kartu Kunci NFC.
+            </p>
           </article>
+
+          <article className="p-5 rounded-[16px] border border-btnred-border bg-btnred-soft/35 space-y-2.5">
+            <div className="w-9 h-9 rounded-[10px] bg-btnred text-white flex items-center justify-center">
+              <Lock className="w-4 h-4" aria-hidden="true" />
+            </div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-btnred">
+              4 · Skema Hak Huni &amp; SHM
+            </div>
+            <h3 className="font-display text-[15px] font-bold text-ink">
+              Anti gagal bayar (seperti sewa)
+            </h3>
+            <p className="text-xs text-ink-secondary leading-relaxed">
+              SHM tetap ditahan BTN sampai lunas. Jika pemenang berhenti setor, Kartu NFC dibekukan, hak huni dicabut, dan setoran dihitung sebagai biaya sewa (rental).
+            </p>
+          </article>
+        </div>
+
+        {/* Dedicated Anti-Default / Rental-Conversion Safeguard Box */}
+        <div className="rounded-[18px] border border-hairline bg-sheet p-6 sm:p-7 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-5 space-y-3">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-btnred-soft text-btnred border border-btnred-border text-xs font-semibold">
+              <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
+              Menjawab Risiko Terbesar Arisan
+            </span>
+            <h3 className="font-display text-lg font-bold text-ink leading-snug">
+              Bagaimana jika pemenang hari pertama berhenti bayar iuran harian?
+            </h3>
+            <p className="text-xs text-ink-secondary leading-relaxed">
+              Di <strong>btn TumbuhLayak</strong>, pemenang undian awal <strong>tidak langsung menerima sertifikat SHM</strong>. Sebelum seluruh iuran harian lunas 100%, akad berjalan dengan <strong>Skema Hak Huni Sewa-Beli (Rent-to-Own)</strong> dengan sertifikat ditahan Bank BTN &amp; dikendalikan Kartu Kunci Pintar NFC.
+            </p>
+          </div>
+
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-4 rounded-[14px] bg-positive-soft/60 border border-positive-border space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-positive">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                <span>Jika Iuran Harian Lancar</span>
+              </div>
+              <ul className="space-y-1.5 text-xs text-ink-secondary leading-relaxed list-disc pl-4">
+                <li>Pemenang langsung menghuni rumah dengan <strong>Kartu Kunci NFC Aktif</strong>.</li>
+                <li>Autodebet harian Rp 50rb dari rekening BTN terus mencatat progres kepemilikan.</li>
+                <li>Saat kewajiban iuran lunas 100%, Bank BTN menyerahkan <strong>SHM penuh atas nama peserta</strong>.</li>
+              </ul>
+            </div>
+
+            <div className="p-4 rounded-[14px] bg-btnred-soft/60 border border-btnred-border space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-btnred">
+                <Lock className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                <span>Jika Berhenti Bayar (Mangkir)</span>
+              </div>
+              <ul className="space-y-1.5 text-xs text-ink-secondary leading-relaxed list-disc pl-4">
+                <li><strong>Kartu Kunci NFC dibekukan</strong> oleh Admin BTN &amp; hak huni rumah dicabut (tidak boleh menempati unit).</li>
+                <li><strong>SHM/SHGB tetap aman disimpan Bank BTN</strong> — mustahil digadaikan atau dijual sepihak.</li>
+                <li>Setoran sebelumnya <strong>dikonversi sebagai biaya sewa (rental)</strong> selama masa tinggal, dan unit dialihkan ke peserta pengganti agar kas arisan aman 100%.</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* ================================================================= */}
-      {/* FRIENDLY PROMO CTA FOOTER BANNER (Public Mode)                    */}
+      {/* 4. PROMO CTA FOOTER BANNER (Public Mode)                          */}
       {/* ================================================================= */}
       {isPublic && (
         <section className="rounded-[20px] btn-hero-surface text-white p-7 sm:p-9 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-xl">
             <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-ochre-gold">
               <ShieldCheck className="w-4 h-4" aria-hidden="true" />
-              <span>Simulasi pendaftaran cepat · data domisili langsung tersinkron</span>
+              <span>Simulasi pendaftaran 1 menit · domisili otomatis tersinkron</span>
             </div>
             <h2 className="font-display text-xl sm:text-2xl font-bold text-white">
-              Tertarik ikut Arisan Rumah BTN di wilayah Anda?
+              Siap ikut Arisan Rumah Harian BTN di wilayah Anda?
             </h2>
             <p className="text-sm text-blue-100 leading-relaxed">
-              Daftarkan data diri (Nama, NIK, TTL, No. Rekening BTN & Domisili) dalam 1 menit — wilayah klaster akan otomatis menyesuaikan biodata Anda.
+              Daftarkan biodata (Nama, NIK, TTL, No. Rekening BTN &amp; Domisili) untuk memilih perumahan mitra BTN di wilayah Anda dan memantau kuota undian harian.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 flex-shrink-0">
             <button
               type="button"
-              onClick={() => onOpenRegister?.(previewZone.id)}
+              onClick={() => onOpenRegister?.('jabodetabek', 'grand-harmoni-park')}
               className="h-12 px-6 rounded-[11px] bg-btnred hover:bg-btnred-hover text-white font-display font-semibold text-sm inline-flex items-center gap-2 transition-colors whitespace-nowrap"
             >
               <span>Daftar Sekarang</span>
@@ -527,12 +507,11 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
     </div>
   );
 
-  // Inside AppShell (logged-in): render content directly
   if (!isPublic) {
     return content;
   }
 
-  // Public Promotional Landing Page: wrap with its own clean floating BTN navbar + footer
+  // Public Landing Page Shell (Clean header: ONLY btn TumbuhLayak, Masuk, Daftar)
   return (
     <div className="min-h-screen bg-frame flex flex-col">
       <div className="sticky top-3 z-40 px-3 sm:px-6 pt-3">
@@ -549,7 +528,7 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => onOpenRegister?.(previewZone.id)}
+              onClick={() => onOpenRegister?.('jabodetabek', 'grand-harmoni-park')}
               className="h-9 px-4 rounded-[9px] bg-brand hover:bg-brand-hover text-white text-[13px] font-semibold inline-flex items-center gap-1.5 transition-colors"
             >
               <span>Daftar</span>
@@ -566,7 +545,7 @@ export const ProgramHomeView: React.FC<ProgramHomeViewProps> = ({
       <footer className="border-t border-hairline bg-sheet/70 py-5 px-4">
         <div className="max-w-[1220px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-ink-secondary">
           <span>btn TumbuhLayak · Prototipe Inovasi BTN Housingpreneur Batch 3</span>
-          <span>Data peserta & simulasi bersifat ilustratif · acuan harga resmi Kepmen PUPR 689/2023</span>
+          <span>Data proyek merujuk publikasi pengembang &amp; Kepmen PUPR 689/2023 · kuota peserta bersifat simulasi</span>
         </div>
       </footer>
     </div>

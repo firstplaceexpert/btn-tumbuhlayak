@@ -2,7 +2,8 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { DemoUser, NfcPropertyRecord } from '../types';
-import { findPropertyByNfcUid } from '../data/nfcPropertyRegistry';
+import { NFC_PROPERTY_REGISTRY } from '../data/nfcPropertyRegistry';
+import { findPropertyInRegistry } from '../lib/demoStore';
 import { nfcUidSchema } from '../lib/validation';
 import { formatRupiah } from '../lib/formatters';
 import {
@@ -14,20 +15,23 @@ import {
   Smartphone,
   ShieldCheck,
   Search,
+  Lock,
 } from 'lucide-react';
 
 interface NfcScannerViewProps {
   user: DemoUser;
   activeNfcRecord: NfcPropertyRecord | null;
+  nfcRegistry?: NfcPropertyRecord[];
   onPropertyUnlocked: (record: NfcPropertyRecord) => void;
   onGoToLayer2: () => void;
 }
 
-type ScanPhase = 'idle' | 'scanning' | 'matched' | 'error';
+type ScanPhase = 'idle' | 'scanning' | 'matched' | 'frozen' | 'error';
 
 export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
   user,
   activeNfcRecord,
+  nfcRegistry = NFC_PROPERTY_REGISTRY,
   onPropertyUnlocked,
   onGoToLayer2,
 }) => {
@@ -71,12 +75,22 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
     setScanMessage(`Membaca kartu ${uid} dan mencocokkan data sertifikat rumah BTN Anda...`);
 
     window.setTimeout(() => {
-      const found = findPropertyByNfcUid(uid);
+      const found = findPropertyInRegistry(uid, nfcRegistry);
       if (!found) {
         setScanPhase('error');
         setMatchedRecord(null);
         setScanMessage(
           `Nomor kartu ${uid} tidak ditemukan pada data serah terima rumah Bank BTN. Pastikan Anda menggunakan kartu kunci resmi.`
+        );
+        return;
+      }
+
+      if (found.occupancyStatus === 'dibekukan-tunggakan') {
+        setScanPhase('frozen');
+        setMatchedRecord(found);
+        setScanMessage(
+          found.freezeReason ||
+            `Kartu Kunci NFC ${found.uid} DIBEKUKAN oleh Admin BTN karena tunggakan iuran arisan harian. Sesuai skema Hak Huni Sewa-Beli BTN, hak menempati unit dicabut, SHM tetap disimpan Bank BTN, dan setoran sebelumnya dihitung sebagai biaya sewa (rental).`
         );
         return;
       }
@@ -164,7 +178,7 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
           </p>
         </div>
 
-        {matchedRecord && (
+        {matchedRecord && scanPhase === 'matched' && (
           <button
             type="button"
             onClick={onGoToLayer2}
@@ -243,7 +257,7 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
                 className={`w-16 h-16 rounded-full flex items-center justify-center border-2 transition-colors relative z-10 ${
                   scanPhase === 'matched'
                     ? 'bg-positive-soft border-positive text-positive'
-                    : scanPhase === 'error'
+                    : scanPhase === 'frozen' || scanPhase === 'error'
                     ? 'bg-btnred-soft border-btnred text-btnred'
                     : scanPhase === 'scanning'
                     ? 'bg-brand text-white border-brand'
@@ -252,6 +266,8 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
               >
                 {scanPhase === 'matched' ? (
                   <CheckCircle2 className="w-7 h-7" aria-hidden="true" />
+                ) : scanPhase === 'frozen' ? (
+                  <Lock className="w-7 h-7" aria-hidden="true" />
                 ) : scanPhase === 'error' ? (
                   <AlertCircle className="w-7 h-7" aria-hidden="true" />
                 ) : (
@@ -266,13 +282,15 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
                   ? 'Memindai kartu kunci rumah...'
                   : scanPhase === 'matched'
                   ? 'Kartu Kunci Rumah BTN Terverifikasi'
+                  : scanPhase === 'frozen'
+                  ? 'Kartu Kunci NFC Dibekukan (Tunggakan Iuran)'
                   : scanPhase === 'error'
                   ? 'Verifikasi Kartu Gagal'
                   : 'Siap Memindai Kartu Kunci Rumah'}
               </div>
               <p
                 className={`text-[13px] leading-relaxed ${
-                  scanPhase === 'error' ? 'text-btnred' : 'text-ink-secondary'
+                  scanPhase === 'error' || scanPhase === 'frozen' ? 'text-btnred' : 'text-ink-secondary'
                 }`}
               >
                 {scanMessage}
@@ -299,13 +317,36 @@ export const NfcScannerView: React.FC<NfcScannerViewProps> = ({
             </button>
           </div>
 
+          {/* Frozen NFC Card Enforcement Notice (Anti-Default Rental Safeguard) */}
+          {matchedRecord && scanPhase === 'frozen' && (
+            <div className="p-5 rounded-card bg-btnred-soft/75 border-2 border-btnred space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-bold text-btnred inline-flex items-center gap-1.5">
+                  <Lock className="w-4 h-4" aria-hidden="true" />
+                  Akses Unit &amp; Hak Huni Dibekukan Bank BTN
+                </span>
+                <span className="text-xs font-mono font-semibold text-ink">
+                  {matchedRecord.uid}
+                </span>
+              </div>
+              <p className="text-xs text-ink-secondary leading-relaxed">
+                Unit <strong>{matchedRecord.clusterName} {matchedRecord.unitBlock}</strong> atas nama{' '}
+                <strong>{matchedRecord.ownerName}</strong> berstatus <strong>Tunggakan Iuran Harian</strong>. Sesuai akad Sewa-Beli (Hak Huni) BTN: sertifikat{' '}
+                <strong>{matchedRecord.certificateNo}</strong> tetap disimpan Bank BTN, hak menempati unit dicabut, dan setoran yang masuk sebelumnya diperhitungkan sebagai biaya sewa (rental).
+              </p>
+            </div>
+          )}
+
           {/* Verified Unit Summary & Direct Access CTA */}
           {matchedRecord && scanPhase === 'matched' && (
             <div className="p-5 rounded-card bg-positive-soft/70 border border-positive-border space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-positive inline-flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4" aria-hidden="true" />
-                  Data Unit Rumah Terverifikasi
+                  Data Unit Rumah Terverifikasi ·{' '}
+                  {matchedRecord.occupancyStatus === 'lunas-shm'
+                    ? 'Lunas 100% · SHM Penuh'
+                    : 'Hak Huni Aktif · SHM Disimpan BTN'}
                 </span>
                 <span className="text-xs font-mono font-semibold text-ink">
                   {matchedRecord.certificateNo}

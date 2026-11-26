@@ -203,8 +203,36 @@ export interface HouseTemplate {
 // AUTH, LAYER 1 (ARISAN RUMAH BTN), & NFC SMART KEY CARD TYPES
 // =========================================================================
 
+export type UserRole = 'customer' | 'admin';
+export type LotteryStatus = 'menunggu' | 'terpilih-akad' | 'kartu-aktif';
+export type OccupancyLegalStatus = 'hak-huni-aktif' | 'lunas-shm' | 'dibekukan-tunggakan';
+
+export interface BtnHousingProject {
+  id: string;
+  zoneId: string;
+  name: string;
+  city: string;
+  developer: string;
+  developerInitials: string;
+  categoryLabel: 'SUBSIDI FLPP' | 'KOMERSIAL BTN';
+  houseType: string;
+  templateId: string;
+  luasTanah: number;
+  luasBangunan: number;
+  bedrooms: number;
+  bathrooms: number;
+  price: number;
+  dailyContribution: number;
+  registeredMembers: number;
+  imageUrl: string;
+  sourceUrl?: string;
+  sourceNote: string;
+  highlightTag?: string;
+}
+
 export interface DemoUser {
   id: string;
+  role?: UserRole;
   email: string;
   name: string;
   roleLabel: string;
@@ -214,13 +242,31 @@ export interface DemoUser {
   btnAccountNumber?: string;
   domicileCity?: string;
   domicileZoneId?: string;
+  selectedProjectId?: string;
+  lotteryStatus?: LotteryStatus;
   arisanGroupName: string;
   arisanSlotNumber: number;
   paidMonths: number;
+  paidDays?: number;
   totalCycleMonths: number;
   monthlyContribution: number;
   hasReceivedUnit: boolean;
   assignedNfcUid: string | null;
+}
+
+export interface AdminAuditLog {
+  id: string;
+  timestamp: string;
+  action:
+    | 'undian-acak'
+    | 'penetapan-manual'
+    | 'program-nfc'
+    | 'bekukan-nfc'
+    | 'aktifkan-nfc'
+    | 'lunas-shm';
+  participantName: string;
+  zoneLabel: string;
+  detail: string;
 }
 
 export interface NfcPropertyRecord {
@@ -242,6 +288,12 @@ export interface NfcPropertyRecord {
   kondisiBangunan: BuildingCondition;
   arisanBatchLabel: string;
   handoverDate: string;
+  projectId?: string;
+  occupancyStatus?: OccupancyLegalStatus;
+  dailyContribution?: number;
+  paidDays?: number;
+  totalRequiredDays?: number;
+  freezeReason?: string;
 }
 
 export interface ArisanMemberSlot {

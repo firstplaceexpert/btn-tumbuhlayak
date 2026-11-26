@@ -27,6 +27,7 @@ import {
 interface LoginScreenProps {
   initialMode?: 'login' | 'register';
   preselectedZoneId?: string;
+  allUsers?: DemoUser[];
   onBackToHome?: () => void;
   onLoginSuccess: (user: DemoUser, isNewRegistration?: boolean) => void;
 }
@@ -34,13 +35,15 @@ interface LoginScreenProps {
 export const LoginScreen: React.FC<LoginScreenProps> = ({
   initialMode = 'login',
   preselectedZoneId,
+  allUsers = DEMO_USERS,
   onBackToHome,
   onLoginSuccess,
 }) => {
   const [authMode, setAuthMode] = useState<'login' | 'register'>(initialMode);
 
-  // Login state
-  const [email, setEmail] = useState(DEMO_USERS[0].email);
+  // Login state (default to Budi Santoso customer demo email)
+  const defaultCustomer = allUsers.find((u) => u.role !== 'admin') || DEMO_USERS[0];
+  const [email, setEmail] = useState(defaultCustomer.email);
   const [pin, setPin] = useState('123456');
   const [loginErrors, setLoginErrors] = useState<{ email?: string; pin?: string }>({});
 
@@ -79,7 +82,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
 
     setLoginErrors({});
-    const matched = DEMO_USERS.find(
+    const matched = allUsers.find(
       (u) => u.email.toLowerCase() === parsed.data.email.toLowerCase()
     );
 
@@ -91,22 +94,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         .replace(/[._-]+/g, ' ')
         .replace(/\b\w/g, (c) => c.toUpperCase());
 
-      onLoginSuccess({
-        id: `user-${Date.now()}`,
-        email: parsed.data.email,
-        name: displayName || 'Nasabah BTN',
-        roleLabel: 'Peserta Arisan Aktif · Menunggu Undian',
-        domicileCity: 'Bandung, Jawa Barat',
-        domicileZoneId: 'jawa',
-        btnAccountNumber: '0026015004821901',
-        arisanGroupName: 'Simulasi Klaster Jawa',
-        arisanSlotNumber: 7,
-        paidMonths: 10,
-        totalCycleMonths: 48,
-        monthlyContribution: 1500000,
-        hasReceivedUnit: false,
-        assignedNfcUid: null,
-      });
+      onLoginSuccess(
+        {
+          id: `user-${Date.now()}`,
+          role: 'customer',
+          email: parsed.data.email,
+          name: displayName || 'Nasabah BTN',
+          roleLabel: 'Peserta Arisan Aktif · Menunggu Undian',
+          domicileCity: 'Bandung, Jawa Barat',
+          domicileZoneId: 'jawa',
+          lotteryStatus: 'menunggu',
+          btnAccountNumber: '0026015004821901',
+          arisanGroupName: 'Simulasi Klaster Jawa',
+          arisanSlotNumber: 7,
+          paidMonths: 10,
+          totalCycleMonths: 48,
+          monthlyContribution: 1500000,
+          hasReceivedUnit: false,
+          assignedNfcUid: null,
+        },
+        true
+      );
     }
   };
 
@@ -147,6 +155,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     onLoginSuccess(
       {
         id: `user-${Date.now()}`,
+        role: 'customer',
         email: parsed.data.email,
         name: parsed.data.name,
         nik: parsed.data.nik,
@@ -155,6 +164,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         btnAccountNumber: cleanedAcc,
         domicileCity: parsed.data.domicileCity,
         domicileZoneId: zone.id,
+        lotteryStatus: 'menunggu',
         roleLabel: `Peserta Baru · ${zone.shortLabel}`,
         arisanGroupName: zone.clusterName,
         arisanSlotNumber: zone.registeredMembers + 1,
@@ -381,42 +391,77 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 </button>
               </form>
 
-              {/* 1-Click Demo Personas for Pitching */}
+              {/* 1-Click Demo Personas (Admin BTN + 2 Customers + any newly registered user) */}
               <div className="pt-4 border-t border-rule space-y-2.5">
                 <div className="text-xs font-semibold text-ink-secondary">
-                  Akses cepat akun demo (untuk presentasi juri)
+                  Akses cepat akun demo (Admin BTN &amp; Nasabah)
                 </div>
                 <div className="space-y-2">
-                  {DEMO_USERS.map((demo) => (
-                    <button
-                      key={demo.id}
-                      type="button"
-                      onClick={() => onLoginSuccess({ ...demo })}
-                      className="w-full text-left p-3 rounded-control border border-hairline bg-well hover:border-brand-border hover:bg-brand-soft/60 transition-colors flex items-center justify-between gap-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-ink truncate">
-                            {demo.name}
-                          </span>
-                          {demo.hasReceivedUnit ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-positive-soft text-positive text-xs font-medium whitespace-nowrap">
-                              <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
-                              Punya Kartu NFC
+                  {allUsers
+                    .filter(
+                      (u) =>
+                        u.id === 'admin-btn-01' ||
+                        u.id === 'user-budi' ||
+                        u.id === 'user-siti' ||
+                        u.id.startsWith('user-1')
+                    )
+                    .slice(0, 4)
+                    .map((demo) => (
+                      <button
+                        key={demo.id}
+                        type="button"
+                        onClick={() => onLoginSuccess({ ...demo })}
+                        className={`w-full text-left p-3 rounded-control border transition-colors flex items-center justify-between gap-3 ${
+                          demo.role === 'admin'
+                            ? 'border-btnred-border bg-btnred-soft/50 hover:bg-btnred-soft'
+                            : 'border-hairline bg-well hover:border-brand-border hover:bg-brand-soft/60'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-ink truncate">
+                              {demo.name}
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-brand-soft text-brand text-xs font-medium whitespace-nowrap">
-                              Peserta Arisan
-                            </span>
-                          )}
+                            {demo.role === 'admin' ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-btnred text-white text-[11px] font-semibold whitespace-nowrap">
+                                <ShieldCheck className="w-3 h-3" aria-hidden="true" />
+                                Admin BTN
+                              </span>
+                            ) : demo.hasReceivedUnit ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-positive-soft text-positive text-xs font-medium whitespace-nowrap">
+                                <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
+                                Punya Kartu NFC
+                              </span>
+                            ) : demo.lotteryStatus === 'terpilih-akad' ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-ochre-soft text-ochre text-xs font-medium whitespace-nowrap">
+                                Terpilih Akad
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-brand-soft text-brand text-xs font-medium whitespace-nowrap">
+                                Peserta Arisan
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-ink-secondary mt-0.5 truncate">
+                            {demo.role === 'admin'
+                              ? `${demo.email} · Undian arisan & pemrograman Kartu NFC`
+                              : `${demo.domicileCity || 'Indonesia'} · ${
+                                  demo.hasReceivedUnit
+                                    ? demo.assignedNfcUid
+                                    : demo.lotteryStatus === 'terpilih-akad'
+                                    ? 'Menunggu kartu NFC diprogram Admin'
+                                    : 'Menunggu undian Admin BTN'
+                                }`}
+                          </div>
                         </div>
-                        <div className="text-xs text-ink-secondary mt-0.5 truncate">
-                          {demo.domicileCity} · {demo.hasReceivedUnit ? demo.assignedNfcUid : 'Belum serah terima unit'}
-                        </div>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-brand flex-shrink-0" aria-hidden="true" />
-                    </button>
-                  ))}
+                        <ArrowRight
+                          className={`w-4 h-4 flex-shrink-0 ${
+                            demo.role === 'admin' ? 'text-btnred' : 'text-brand'
+                          }`}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    ))}
                 </div>
               </div>
             </>

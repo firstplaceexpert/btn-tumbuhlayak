@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { ProgramHomeView } from '../components/ProgramHomeView';
 import { LoginScreen } from '../components/LoginScreen';
 import { AppShell, WorkspaceTab } from '../components/AppShell';
+import { AdminPortalView } from '../components/AdminPortalView';
 import { ArisanLayerView } from '../components/ArisanLayerView';
 import { NfcScannerView } from '../components/NfcScannerView';
 import { PlannerWorkspace } from '../components/PlannerWorkspace';
@@ -16,24 +17,51 @@ import {
   PITCHING_PRESETS,
 } from '../data/housingConfig';
 import { HOUSE_TEMPLATES } from '../data/floorplanPresets';
+import { ARISAN_LOCATION_ZONES } from '../data/arisanLocations';
 import { calculateStagedRABAndValuation } from '../lib/calculator';
+import {
+  DemoStoreState,
+  formatNowIndonesian,
+  getInitialDemoStoreState,
+  loadDemoStoreState,
+  resetDemoStoreState,
+  saveDemoStoreState,
+} from '../lib/demoStore';
 import {
   DemoUser,
   ExpansionModule,
   FloorRoom,
   HousingProfile,
   NfcPropertyRecord,
+  OccupancyLegalStatus,
   PhaseId,
 } from '../types';
 
 const DEFAULT_TEMPLATE = HOUSE_TEMPLATES[0];
 
 export default function Home() {
+  // Shared persistent demo state (synced across Customer Registration, Admin Lottery & NFC Programming)
+  const [demoStore, setDemoStore] = useState<DemoStoreState>(() => getInitialDemoStoreState());
+  const [storeHydrated, setStoreHydrated] = useState(false);
+
+  useEffect(() => {
+    setDemoStore(loadDemoStoreState());
+    setStoreHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (storeHydrated) {
+      saveDemoStoreState(demoStore);
+    }
+  }, [demoStore, storeHydrated]);
+
   // Public Landing & Authentication Gate
   const [currentUser, setCurrentUser] = useState<DemoUser | null>(null);
   const [publicView, setPublicView] = useState<'home' | 'login' | 'register'>('home');
   const [prefillZoneId, setPrefillZoneId] = useState<string | undefined>(undefined);
-  const [requestedArisanZoneId, setRequestedArisanZoneId] = useState<string | undefined>(undefined);
+  const [selectedArisanProjectId, setSelectedArisanProjectId] = useState<string | undefined>(
+    undefined
+  );
 
   // Navigation & NFC Gate
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('beranda');
@@ -64,31 +92,185 @@ export default function Home() {
   );
 
   const handleLoginSuccess = (user: DemoUser, isNewRegistration = false) => {
-    setCurrentUser(user);
+    if (isNewRegistration) {
+      setDemoStore((prev) => {
+        const exists = prev.users.some(
+          (u) => u.email.toLowerCase() === user.email.toLowerCase()
+        );
+        return exists ? prev : { ...prev, users: [user, ...prev.users] };
+      });
+    }
+
+    const latestUser =
+      demoStore.users.find((u) => u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase()) ||
+      user;
+
+    setCurrentUser(latestUser);
     setActiveNfcRecord(null);
-    setRequestedArisanZoneId(user.domicileZoneId);
-    setActiveTab(isNewRegistration ? 'arisan' : 'beranda');
+    if (latestUser.role === 'admin') {
+      setActiveTab('admin');
+    } else {
+      setActiveTab(isNewRegistration ? 'arisan' : 'beranda');
+    }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     setActiveNfcRecord(null);
-    setRequestedArisanZoneId(undefined);
     setPublicView('home');
     setActiveTab('beranda');
   };
 
-  // Layer 1 Pitching Action: Simulate winning the Arisan draw & receiving BTN Smart Key NFC Card
-  const handleSimulateWinUnit = () => {
-    setCurrentUser((prev) => {
-      if (!prev) return prev;
+  // Admin BTN Action 1: Determine lottery winner (random spin or manual assignment)
+  const handleAdminSelectWinner = (
+    userId: string,
+    method: 'undian-acak' | 'penetapan-manual'
+  ) => {
+    setDemoStore((prev) => {
+      const target = prev.users.find((u) => u.id === userId);
+      if (!target) return prev;
+      const zoneLabel =
+        ARISAN_LOCATION_ZONES.find((z) => z.id === target.domicileZoneId)?.shortLabel || 'Jawa';
+
+      const updatedUsers = prev.users.map((u) =>
+        u.id === userId
+          ? {
+              ...u,
+              lotteryStatus: 'terpilih-akad' as const,
+              roleLabel: 'Terpilih Akad · Menunggu Kartu Kunci NFC',
+            }
+          : u
+      );
+
       return {
         ...prev,
-        hasReceivedUnit: true,
-        assignedNfcUid: 'BTN-NFC-2160-0088',
-        roleLabel: 'Penerima Unit BTN · Kartu NFC Aktif',
+        users: updatedUsers,
+        auditLogs: [
+          {
+            id: `log-${Date.now()}`,
+            timestamp: formatNowIndonesian(),
+            action: method,
+            participantName: target.name,
+            zoneLabel,
+            detail:
+              method === 'undian-acak'
+                ? `Terpilih melalui undian acak klaster ${zoneLabel} (Giliran #${target.arisanSlotNumber}).`
+                : `Ditetapkan langsung untuk jadwal akad klaster ${zoneLabel} oleh Admin BTN.`,
+          },
+          ...prev.auditLogs,
+        ],
       };
     });
+  };
+
+  // Admin BTN Action 2: Program & issue NFC Smart Key Card to a participant
+  const handleAdminProgramNfcCard = (userId: string, record: NfcPropertyRecord) => {
+    setDemoStore((prev) => {
+      const target = prev.users.find((u) => u.id === userId);
+      const zoneLabel =
+        ARISAN_LOCATION_ZONES.find((z) => z.id === target?.domicileZoneId)?.shortLabel || 'Jawa';
+
+      const existsIdx = prev.nfcRegistry.findIndex(
+        (r) => r.uid.toUpperCase() === record.uid.toUpperCase()
+      );
+      const nextRegistry =
+        existsIdx >= 0
+          ? prev.nfcRegistry.map((r, i) => (i === existsIdx ? record : r))
+          : [record, ...prev.nfcRegistry];
+
+      const nextUsers = prev.users.map((u) =>
+        u.id === userId
+          ? {
+              ...u,
+              hasReceivedUnit: true,
+              assignedNfcUid: record.uid,
+              lotteryStatus: 'kartu-aktif' as const,
+              roleLabel: 'Penerima Unit BTN · Kartu NFC Aktif',
+            }
+          : u
+      );
+
+      return {
+        users: nextUsers,
+        nfcRegistry: nextRegistry,
+        auditLogs: [
+          {
+            id: `log-nfc-${Date.now()}`,
+            timestamp: formatNowIndonesian(),
+            action: 'program-nfc',
+            participantName: target?.name || record.ownerName,
+            zoneLabel,
+            detail: `Kartu ${record.uid} diprogram untuk ${record.clusterName} ${record.unitBlock} (${record.houseTypeLabel} · ${record.certificateNo}).`,
+          },
+          ...prev.auditLogs,
+        ],
+      };
+    });
+  };
+
+  // Admin BTN Action 3: Freeze NFC Card (missed daily payments -> rental conversion), Reactivate, or Release SHM
+  const handleAdminUpdateNfcOccupancyStatus = (
+    uid: string,
+    status: OccupancyLegalStatus,
+    reason?: string
+  ) => {
+    setDemoStore((prev) => {
+      const targetRec = prev.nfcRegistry.find((r) => r.uid.toUpperCase() === uid.toUpperCase());
+      if (!targetRec) return prev;
+
+      const nextRegistry = prev.nfcRegistry.map((r) =>
+        r.uid.toUpperCase() === uid.toUpperCase()
+          ? {
+              ...r,
+              occupancyStatus: status,
+              freezeReason: status === 'dibekukan-tunggakan' ? reason : undefined,
+              paidDays: status === 'lunas-shm' ? r.totalRequiredDays ?? 3400 : r.paidDays,
+            }
+          : r
+      );
+
+      const actionType =
+        status === 'dibekukan-tunggakan'
+          ? ('bekukan-nfc' as const)
+          : status === 'lunas-shm'
+          ? ('lunas-shm' as const)
+          : ('aktifkan-nfc' as const);
+
+      const detail =
+        status === 'dibekukan-tunggakan'
+          ? `Kartu ${uid} (${targetRec.clusterName}) DIBEKUKAN akibat tunggakan iuran harian. Hak huni dicabut, SHM tetap disimpan Bank BTN, setoran dikonversi sebagai biaya sewa (rental).`
+          : status === 'lunas-shm'
+          ? `Iuran harian unit ${uid} (${targetRec.clusterName}) dinyatakan LUNAS 100% — sertifikat SHM diserahkan penuh.`
+          : `Kartu ${uid} (${targetRec.clusterName}) diaktifkan kembali dengan status Hak Huni Sewa-Beli Aktif.`;
+
+      return {
+        ...prev,
+        nfcRegistry: nextRegistry,
+        auditLogs: [
+          {
+            id: `log-status-${Date.now()}`,
+            timestamp: formatNowIndonesian(),
+            action: actionType,
+            participantName: targetRec.ownerName,
+            zoneLabel: targetRec.lokasiKota,
+            detail,
+          },
+          ...prev.auditLogs,
+        ],
+      };
+    });
+
+    if (
+      status === 'dibekukan-tunggakan' &&
+      activeNfcRecord?.uid.toUpperCase() === uid.toUpperCase()
+    ) {
+      setActiveNfcRecord(null);
+    }
+  };
+
+  const handleResetAdminDemoStore = () => {
+    const fresh = resetDemoStoreState();
+    setDemoStore(fresh);
   };
 
   // Bridge Action: NFC Card Scanned & Verified -> Hydrate exact house data & unlock Layer 2!
@@ -312,6 +494,7 @@ export default function Home() {
         key={`${publicView}-${prefillZoneId || 'default'}`}
         initialMode={publicView === 'register' ? 'register' : 'login'}
         preselectedZoneId={prefillZoneId}
+        allUsers={demoStore.users}
         onBackToHome={() => setPublicView('home')}
         onLoginSuccess={handleLoginSuccess}
       />
@@ -332,13 +515,27 @@ export default function Home() {
         profile={profile}
         selectedModuleCount={selectedModuleCount}
       >
+        {/* Portal Operasional Admin BTN (Undian Arisan & Pemrograman Kartu NFC) */}
+        {currentUser.role === 'admin' && (
+          <AdminPortalView
+            adminUser={currentUser}
+            users={demoStore.users}
+            nfcRegistry={demoStore.nfcRegistry}
+            auditLogs={demoStore.auditLogs}
+            onSelectWinner={handleAdminSelectWinner}
+            onProgramNfcCard={handleAdminProgramNfcCard}
+            onUpdateNfcOccupancyStatus={handleAdminUpdateNfcOccupancyStatus}
+            onResetDemoData={handleResetAdminDemoStore}
+          />
+        )}
+
         {/* Beranda Program (Dashboard Utama Berwarna & Personal) */}
-        {activeTab === 'beranda' && (
+        {currentUser.role !== 'admin' && activeTab === 'beranda' && (
           <ProgramHomeView
             user={currentUser}
             hasUnlockedNfc={Boolean(activeNfcRecord)}
-            onGoToArisan={(zoneId) => {
-              setRequestedArisanZoneId(zoneId || currentUser.domicileZoneId);
+            onGoToArisan={(_zoneId, projectId) => {
+              if (projectId) setSelectedArisanProjectId(projectId);
               setActiveTab('arisan');
             }}
             onGoToNfc={() => setActiveTab('nfc')}
@@ -347,20 +544,21 @@ export default function Home() {
         )}
 
         {/* Skema Arisan Rumah BTN (Otomatis sesuai wilayah biodata user) */}
-        {activeTab === 'arisan' && (
+        {currentUser.role !== 'admin' && activeTab === 'arisan' && (
           <ArisanLayerView
             user={currentUser}
-            initialZoneId={requestedArisanZoneId}
-            onSimulateWinUnit={handleSimulateWinUnit}
+            nfcRegistry={demoStore.nfcRegistry}
+            initialProjectId={selectedArisanProjectId}
             onGoToNfcScanner={() => setActiveTab('nfc')}
           />
         )}
 
         {/* BRIDGE: Pemindai Kartu Kunci Rumah NFC */}
-        {activeTab === 'nfc' && (
+        {currentUser.role !== 'admin' && activeTab === 'nfc' && (
           <NfcScannerView
             user={currentUser}
             activeNfcRecord={activeNfcRecord}
+            nfcRegistry={demoStore.nfcRegistry}
             onPropertyUnlocked={handlePropertyUnlocked}
             onGoToLayer2={() => setActiveTab('planner')}
           />
