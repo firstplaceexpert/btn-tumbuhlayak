@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="512" height="512" fill="none">
+  <!-- Outer rounded-square frame (top-left arc to roof break) -->
+  <path
+    d="M 65 14 H 34 C 21.85 14 14 21.85 14 34 V 53"
+    stroke="#1B56C6"
+    stroke-width="9"
+    stroke-linecap="butt"
+    stroke-linejoin="round"
+  />
+  <!-- Bottom-left outer frame (below roof overhang to center gap) -->
+  <path
+    d="M 14 68 V 86 C 14 98.15 21.85 106 34 106 H 37"
+    stroke="#1B56C6"
+    stroke-width="9"
+    stroke-linecap="butt"
+    stroke-linejoin="round"
+  />
+  <!-- Right upper stub below NFC arcs -->
+  <path
+    d="M 106 50 V 58"
+    stroke="#1B56C6"
+    stroke-width="9"
+    stroke-linecap="butt"
+  />
+  <!-- Main architectural roof gable + chimney -->
+  <path
+    d="M 12 63 L 52 34 L 106 67"
+    stroke="#1B56C6"
+    stroke-width="9.5"
+    stroke-linecap="butt"
+    stroke-linejoin="round"
+  />
+  <rect x="27" y="38" width="8.5" height="14" rx="1.5" fill="#1B56C6" />
+  <!-- Right lower frame + bottom bar + central T stem -->
+  <path
+    d="M 106 65 V 86 C 106 98.15 98.15 106 86 106 H 47 V 41"
+    stroke="#1B56C6"
+    stroke-width="9"
+    stroke-linecap="butt"
+    stroke-linejoin="round"
+  />
+  <!-- Interior geometric "L" pillar -->
+  <path
+    d="M 64 51 V 87 H 104"
+    stroke="#1B56C6"
+    stroke-width="9"
+    stroke-linecap="butt"
+    stroke-linejoin="round"
+  />
+  <!-- Crimson BTN NFC Wireless Arcs (Top-Right corner) -->
+  <path
+    d="M 75 28 C 85 28 92 35 92 45"
+    stroke="#C4252E"
+    stroke-width="8"
+    stroke-linecap="butt"
+  />
+  <path
+    d="M 75 14 C 93 14 106 27 106 45"
+    stroke="#C4252E"
+    stroke-width="8"
+    stroke-linecap="butt"
+  />
+</svg>

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 130" width="1120" height="260" fill="none">
+  <g transform="translate(8, 5)">
+    <path
+      d="M 65 14 H 34 C 21.85 14 14 21.85 14 34 V 53"
+      stroke="#1B56C6"
+      stroke-width="9"
+      stroke-linecap="butt"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M 14 68 V 86 C 14 98.15 21.85 106 34 106 H 37"
+      stroke="#1B56C6"
+      stroke-width="9"
+      stroke-linecap="butt"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M 106 50 V 58"
+      stroke="#1B56C6"
+      stroke-width="9"
+      stroke-linecap="butt"
+    />
+    <path
+      d="M 12 63 L 52 34 L 106 67"
+      stroke="#1B56C6"
+      stroke-width="9.5"
+      stroke-linecap="butt"
+      stroke-linejoin="round"
+    />
+    <rect x="27" y="38" width="8.5" height="14" rx="1.5" fill="#1B56C6" />
+    <path
+      d="M 106 65 V 86 C 106 98.15 98.15 106 86 106 H 47 V 41"
+      stroke="#1B56C6"
+      stroke-width="9"
+      stroke-linecap="butt"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M 64 51 V 87 H 104"
+      stroke="#1B56C6"
+      stroke-width="9"
+      stroke-linecap="butt"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M 75 28 C 85 28 92 35 92 45"
+      stroke="#C4252E"
+      stroke-width="8"
+      stroke-linecap="butt"
+    />
+    <path
+      d="M 75 14 C 93 14 106 27 106 45"
+      stroke="#C4252E"
+      stroke-width="8"
+      stroke-linecap="butt"
+    />
+  </g>
+  <text
+    x="146"
+    y="84"
+    font-family="'Poppins', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif"
+    font-size="54"
+    font-weight="700"
+    letter-spacing="-1.2"
+  >
+    <tspan fill="#1B56C6">Tumbuh</tspan><tspan fill="#162B52">Layak</tspan>
+  </text>
+</svg>

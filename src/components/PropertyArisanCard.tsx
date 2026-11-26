@@ -8,7 +8,6 @@ import {
   ArrowRight,
   BedDouble,
   Bath,
-  CalendarClock,
   CheckCircle2,
   ExternalLink,
   Heart,
@@ -18,7 +17,6 @@ import {
 
 interface PropertyArisanCardProps {
   project: BtnHousingProject;
-  /** Override current registered count (e.g., after user joins or simulates 100% quota) */
   registeredOverride?: number;
   isSelected?: boolean;
   isJoined?: boolean;
@@ -32,7 +30,7 @@ export const PropertyArisanCard: React.FC<PropertyArisanCardProps> = ({
   registeredOverride,
   isSelected = false,
   isJoined = false,
-  actionLabel = 'Ikut Arisan Unit Ini',
+  actionLabel = 'Ikut Arisan',
   onAction,
   onSimulateFull,
 }) => {
@@ -50,26 +48,26 @@ export const PropertyArisanCard: React.FC<PropertyArisanCardProps> = ({
 
   return (
     <article
-      className={`group rounded-[18px] bg-sheet border overflow-hidden flex flex-col transition-all ${
+      className={`group rounded-[20px] bg-sheet border overflow-hidden flex flex-col transition-all duration-200 ${
         isSelected
           ? 'border-brand ring-2 ring-brand/15 shadow-[0_14px_30px_-14px_rgba(27,86,198,0.28)]'
-          : 'border-hairline shadow-[0_8px_22px_-14px_rgba(31,36,43,0.14)] hover:border-brand-border hover:shadow-[0_14px_28px_-14px_rgba(27,86,198,0.2)]'
+          : 'border-hairline shadow-[0_8px_22px_-14px_rgba(31,36,43,0.14)] hover:-translate-y-0.5 hover:border-brand-border hover:shadow-[0_16px_32px_-14px_rgba(27,86,198,0.22)]'
       }`}
     >
-      {/* Top House Photo Frame (Inspired by BTN Properti Listing Card) */}
+      {/* Top House Photo Frame */}
       <div className="relative aspect-[16/10] w-full bg-[#ECEAE4] overflow-hidden">
         <img
           src={project.imageUrl}
           alt={`Foto rumah ${project.name} (${project.houseType}) di ${project.city}`}
-          className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500 block"
+          className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-500 block"
         />
 
-        {/* Top-Left Badge Row */}
-        <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5">
+        {/* Top-Left Badges */}
+        <div className="absolute top-3 left-3 flex items-center gap-1.5">
           <span className="px-2.5 py-1 rounded-[8px] bg-brand text-white text-[11px] font-display font-bold tracking-wide shadow-sm">
             RUMAH
           </span>
-          <span className="px-2 py-1 rounded-[8px] bg-sheet/95 backdrop-blur-sm text-ink text-[11px] font-semibold border border-white/60 shadow-sm">
+          <span className="px-2 py-1 rounded-[8px] bg-sheet/95 backdrop-blur-sm text-ink text-[11px] font-semibold shadow-sm">
             {project.houseType}
           </span>
         </div>
@@ -80,7 +78,7 @@ export const PropertyArisanCard: React.FC<PropertyArisanCardProps> = ({
           onClick={() => setFavorited((prev) => !prev)}
           aria-label={favorited ? `Hapus ${project.name} dari favorit` : `Simpan ${project.name} ke favorit`}
           aria-pressed={favorited}
-          className="absolute top-3 right-3 w-9 h-9 rounded-full bg-sheet/92 backdrop-blur-sm border border-white/70 flex items-center justify-center text-ink-secondary hover:text-btnred shadow-sm transition-colors"
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-sheet/92 backdrop-blur-sm flex items-center justify-center text-ink-secondary hover:text-btnred shadow-sm transition-colors"
         >
           <Heart
             className={`w-4 h-4 ${favorited ? 'fill-btnred text-btnred' : ''}`}
@@ -88,35 +86,35 @@ export const PropertyArisanCard: React.FC<PropertyArisanCardProps> = ({
           />
         </button>
 
-        {/* Bottom-Left Status Tag */}
+        {/* Bottom Status Chips */}
         <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between gap-2">
           {model.isReadyToStart ? (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-positive text-white text-[11px] font-semibold shadow-sm">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-positive text-white text-[11px] font-semibold shadow-sm">
               <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
-              Kuota Penuh · Undian Harian Aktif
+              Undian Harian Aktif
             </span>
           ) : project.highlightTag ? (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-ochre text-white text-[11px] font-semibold shadow-sm">
+            <span className="px-2.5 py-0.5 rounded-full bg-ochre text-white text-[11px] font-semibold shadow-sm">
               {project.highlightTag}
             </span>
           ) : (
             <span />
           )}
 
-          <span className="px-2 py-0.5 rounded-full bg-ink/75 text-white text-[10px] font-medium backdrop-blur-sm">
+          <span className="px-2.5 py-0.5 rounded-full bg-ink/80 text-white text-[10.5px] font-semibold backdrop-blur-sm">
             1 rumah / hari
           </span>
         </div>
       </div>
 
-      {/* Body Details */}
+      {/* Concise Visual Body */}
       <div className="p-5 flex-1 flex flex-col justify-between gap-4">
-        <div className="space-y-3">
-          {/* City + Project Name + Price */}
+        <div className="space-y-3.5">
+          {/* City + Title + Price */}
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2 text-xs text-ink-secondary">
               <span className="truncate">{project.city}</span>
-              <span className="text-[11px] font-semibold text-positive whitespace-nowrap">
+              <span className="text-[10.5px] font-bold text-positive whitespace-nowrap">
                 {project.categoryLabel}
               </span>
             </div>
@@ -126,18 +124,18 @@ export const PropertyArisanCard: React.FC<PropertyArisanCardProps> = ({
             </h3>
 
             <div className="flex items-baseline gap-1.5 pt-0.5">
-              <span className="text-xs text-ink-secondary">Mulai dari</span>
+              <span className="text-xs text-ink-secondary">Mulai</span>
               <span className="font-display text-lg font-extrabold text-brand tabular-nums">
                 {formattedPrice}
               </span>
             </div>
           </div>
 
-          {/* Quick Spec Pills */}
-          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[11.5px] text-ink-secondary">
+          {/* Mini Spec Row */}
+          <div className="flex items-center gap-3.5 text-[11.5px] text-ink-secondary">
             <span className="inline-flex items-center gap-1">
               <Maximize2 className="w-3 h-3 text-ink-subtle" aria-hidden="true" />
-              LB {project.luasBangunan} / LT {project.luasTanah} m²
+              {project.luasBangunan}/{project.luasTanah} m²
             </span>
             <span className="inline-flex items-center gap-1">
               <BedDouble className="w-3.5 h-3.5 text-ink-subtle" aria-hidden="true" />
@@ -149,46 +147,38 @@ export const PropertyArisanCard: React.FC<PropertyArisanCardProps> = ({
             </span>
           </div>
 
-          {/* Arisan Harian Formula Highlight Box */}
-          <div className="p-3.5 rounded-[12px] bg-brand-soft/65 border border-brand-border/80 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-secondary">
-                <CalendarClock className="w-3.5 h-3.5 text-brand flex-shrink-0" aria-hidden="true" />
-                Iuran Arisan Harian
-              </span>
-              <span className="font-display text-sm font-bold text-brand tabular-nums">
-                {formatRupiah(project.dailyContribution)} / hari
-              </span>
+          {/* Compact 2-Column Arisan Metric Pill Strip */}
+          <div className="grid grid-cols-2 gap-2 p-2.5 rounded-[12px] bg-brand-soft/65 border border-brand-border/75 tabular-nums">
+            <div className="px-1.5">
+              <div className="text-[10.5px] text-ink-secondary">Iuran Harian</div>
+              <div className="font-display text-sm font-bold text-brand">
+                {formatRupiah(project.dailyContribution)}/hr
+              </div>
+              <div className="text-[10.5px] font-mono text-ink-secondary">{yearsText} tahun</div>
             </div>
-
-            <div className="flex items-center justify-between gap-2 text-xs">
-              <span className="text-ink-secondary">Lama siklus lunas</span>
-              <strong className="font-mono text-ink tabular-nums">
-                {yearsText} tahun ({model.cycleDays.toLocaleString('id-ID')} hari)
-              </strong>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 text-xs pt-1.5 border-t border-brand-border/50">
-              <span className="text-ink-secondary">Target kuota (1 rumah/hr)</span>
-              <strong className="font-mono text-ink tabular-nums">
-                {model.requiredQuota.toLocaleString('id-ID')} peserta
-              </strong>
+            <div className="px-2 border-l border-brand-border/60">
+              <div className="text-[10.5px] text-ink-secondary">Target Kuota</div>
+              <div className="font-display text-sm font-bold text-ink">
+                {model.requiredQuota.toLocaleString('id-ID')} org
+              </div>
+              <div className="text-[10.5px] text-positive font-semibold">1 unit / hari</div>
             </div>
           </div>
 
-          {/* Remaining Quota Progress Bar (Core User Requirement #5) */}
+          {/* Clean Quota Bar */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-2 text-xs tabular-nums">
-              <span className="inline-flex items-center gap-1 font-medium text-ink">
+              <span className="inline-flex items-center gap-1 font-semibold text-ink">
                 <Users className="w-3.5 h-3.5 text-brand flex-shrink-0" aria-hidden="true" />
-                {model.registeredMembers.toLocaleString('id-ID')} /{' '}
-                {model.requiredQuota.toLocaleString('id-ID')} orang
+                {model.isReadyToStart ? (
+                  <span className="text-positive">Kuota penuh 100%</span>
+                ) : (
+                  <span className="text-btnred">
+                    Sisa {model.remainingSlots.toLocaleString('id-ID')} orang lagi
+                  </span>
+                )}
               </span>
-              <span
-                className={`font-mono font-bold ${
-                  model.isReadyToStart ? 'text-positive' : 'text-btnred'
-                }`}
-              >
+              <span className="font-mono text-[11px] font-bold text-ink-secondary">
                 {model.quotaProgressPercent}%
               </span>
             </div>
@@ -201,33 +191,17 @@ export const PropertyArisanCard: React.FC<PropertyArisanCardProps> = ({
                 style={{ width: `${model.quotaProgressPercent}%` }}
               />
             </div>
-
-            <div className="text-xs leading-snug">
-              {model.isReadyToStart ? (
-                <span className="font-semibold text-positive">
-                  Kuota terpenuhi 100% — undian 1 rumah setiap hari sudah berjalan!
-                </span>
-              ) : (
-                <span className="text-ink-secondary">
-                  Masih butuh{' '}
-                  <strong className="text-btnred font-semibold tabular-nums">
-                    sisa {model.remainingSlots.toLocaleString('id-ID')} orang lagi
-                  </strong>{' '}
-                  agar undian harian berjalan.
-                </span>
-              )}
-            </div>
           </div>
         </div>
 
-        {/* Bottom Developer Signature Row & Action Buttons */}
-        <div className="pt-3 border-t border-rule space-y-3">
+        {/* Footer Developer & Action */}
+        <div className="pt-3 border-t border-rule space-y-2.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="w-7 h-7 rounded-full bg-well border border-hairline text-[10px] font-display font-bold text-brand flex items-center justify-center flex-shrink-0">
+              <span className="w-6 h-6 rounded-full bg-well border border-hairline text-[10px] font-display font-bold text-brand flex items-center justify-center flex-shrink-0">
                 {project.developerInitials}
               </span>
-              <span className="text-xs font-bold text-ink tracking-wide truncate uppercase">
+              <span className="text-[11.5px] font-bold text-ink tracking-wide truncate uppercase">
                 {project.developer}
               </span>
             </div>
@@ -236,16 +210,16 @@ export const PropertyArisanCard: React.FC<PropertyArisanCardProps> = ({
                 href={project.sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[11px] font-medium text-brand hover:underline inline-flex items-center gap-1 flex-shrink-0"
+                className="text-[11px] font-medium text-brand hover:underline inline-flex items-center gap-0.5 flex-shrink-0"
               >
-                <span>Info Proyek</span>
+                <span>Detail</span>
                 <ExternalLink className="w-3 h-3" aria-hidden="true" />
               </a>
             )}
           </div>
 
           {(onAction || onSimulateFull) && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
               {onAction && (
                 <button
                   type="button"
@@ -253,12 +227,10 @@ export const PropertyArisanCard: React.FC<PropertyArisanCardProps> = ({
                   className={`flex-1 h-9 px-3.5 rounded-control text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap ${
                     isJoined
                       ? 'bg-positive text-white hover:bg-positive/90'
-                      : isSelected
-                      ? 'bg-brand text-white hover:bg-brand-hover'
                       : 'bg-brand hover:bg-brand-hover text-white'
                   }`}
                 >
-                  <span>{isJoined ? 'Terdaftar di Unit Ini' : actionLabel}</span>
+                  <span>{isJoined ? 'Terdaftar' : actionLabel}</span>
                   <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
               )}
@@ -269,7 +241,7 @@ export const PropertyArisanCard: React.FC<PropertyArisanCardProps> = ({
                   onClick={() => onSimulateFull(project)}
                   className="h-9 px-3 rounded-control border border-control bg-sheet hover:bg-well text-ink text-xs font-medium transition-colors whitespace-nowrap"
                 >
-                  Simulasi Penuh
+                  Penuhkan
                 </button>
               )}
             </div>

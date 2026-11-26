@@ -5,6 +5,7 @@ import { ProgramHomeView } from '../components/ProgramHomeView';
 import { LoginScreen } from '../components/LoginScreen';
 import { AppShell, WorkspaceTab } from '../components/AppShell';
 import { AdminPortalView } from '../components/AdminPortalView';
+import { BrandSplashLoader } from '../components/BrandSplashLoader';
 import { ArisanLayerView } from '../components/ArisanLayerView';
 import { NfcScannerView } from '../components/NfcScannerView';
 import { PlannerWorkspace } from '../components/PlannerWorkspace';
@@ -63,6 +64,17 @@ export default function Home() {
     undefined
   );
 
+  // Fullscreen TumbuhLayak Brand Splash Loader (initial load + login transition)
+  const [splash, setSplash] = useState<{
+    key: number;
+    variant: 'initial' | 'transition';
+    subtitle: string;
+  } | null>({
+    key: 1,
+    variant: 'initial',
+    subtitle: 'Bank BTN · Housing Innovation',
+  });
+
   // Navigation & NFC Gate
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('beranda');
   const [activeNfcRecord, setActiveNfcRecord] = useState<NfcPropertyRecord | null>(null);
@@ -107,6 +119,14 @@ export default function Home() {
 
     setCurrentUser(latestUser);
     setActiveNfcRecord(null);
+    setSplash({
+      key: Date.now(),
+      variant: 'transition',
+      subtitle:
+        latestUser.role === 'admin'
+          ? 'Membuka Portal Operasional Admin BTN...'
+          : `Menyiapkan akun ${latestUser.name}...`,
+    });
     if (latestUser.role === 'admin') {
       setActiveTab('admin');
     } else {
@@ -474,35 +494,51 @@ export default function Home() {
     setFloorView('lt1');
   };
 
+  const splashOverlay = splash ? (
+    <BrandSplashLoader
+      key={splash.key}
+      variant={splash.variant}
+      subtitle={splash.subtitle}
+      onComplete={() => setSplash(null)}
+    />
+  ) : null;
+
   // STEP 0: Promotional Main Dashboard OR Unified Login/Registration Gate
   if (!currentUser) {
     if (publicView === 'home') {
       return (
-        <ProgramHomeView
-          user={null}
-          onOpenRegister={(zoneId) => {
-            setPrefillZoneId(zoneId);
-            setPublicView('register');
-          }}
-          onOpenLogin={() => setPublicView('login')}
-        />
+        <>
+          {splashOverlay}
+          <ProgramHomeView
+            user={null}
+            onOpenRegister={(zoneId) => {
+              setPrefillZoneId(zoneId);
+              setPublicView('register');
+            }}
+            onOpenLogin={() => setPublicView('login')}
+          />
+        </>
       );
     }
 
     return (
-      <LoginScreen
-        key={`${publicView}-${prefillZoneId || 'default'}`}
-        initialMode={publicView === 'register' ? 'register' : 'login'}
-        preselectedZoneId={prefillZoneId}
-        allUsers={demoStore.users}
-        onBackToHome={() => setPublicView('home')}
-        onLoginSuccess={handleLoginSuccess}
-      />
+      <>
+        {splashOverlay}
+        <LoginScreen
+          key={`${publicView}-${prefillZoneId || 'default'}`}
+          initialMode={publicView === 'register' ? 'register' : 'login'}
+          preselectedZoneId={prefillZoneId}
+          allUsers={demoStore.users}
+          onBackToHome={() => setPublicView('home')}
+          onLoginSuccess={handleLoginSuccess}
+        />
+      </>
     );
   }
 
   return (
     <>
+      {splashOverlay}
       <AppShell
         user={currentUser}
         activeTab={activeTab}
